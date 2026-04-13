@@ -20,29 +20,29 @@ type Bootloader interface {
 	// Add other necessary methods (e.g., SetNextBoot)
 }
 
-// Registry to keep track of available plugins
-var plugins = make(map[string]Bootloader)
+// Registry manages the available bootloader plugins
+type Registry struct {
+	plugins map[string]Bootloader
+}
 
-// Register makes a bootloader plugin available by the provided name.
-func Register(name string, plugin Bootloader) {
-	if plugin == nil {
-		panic("bootloader: Register plugin is nil")
+// NewRegistry creates a new bootloader registry with the provided plugins
+func NewRegistry(plugins ...Bootloader) *Registry {
+	r := &Registry{plugins: make(map[string]Bootloader)}
+	for _, p := range plugins {
+		r.plugins[p.Name()] = p
 	}
-	if _, dup := plugins[name]; dup {
-		panic("bootloader: Register called twice for plugin " + name)
-	}
-	plugins[name] = plugin
+	return r
 }
 
 // Get returns a registered bootloader plugin by name.
-func Get(name string) (Bootloader, bool) {
-	p, ok := plugins[name]
+func (r *Registry) Get(name string) (Bootloader, bool) {
+	p, ok := r.plugins[name]
 	return p, ok
 }
 
 // Detect iterates over all registered plugins and returns the name of the first one that detects itself.
-func Detect() string {
-	for name, plugin := range plugins {
+func (r *Registry) Detect() string {
+	for name, plugin := range r.plugins {
 		if plugin.Detect() {
 			return name
 		}

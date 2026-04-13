@@ -8,29 +8,29 @@ type InitSystem interface {
 	// Add more methods interacting with init systems...
 }
 
-// Registry to keep track of init system plugins
-var plugins = make(map[string]InitSystem)
+// Registry manages the available initsystem plugins
+type Registry struct {
+	plugins map[string]InitSystem
+}
 
-// Register makes an init system plugin available by the provided name.
-func Register(name string, plugin InitSystem) {
-	if plugin == nil {
-		panic("initsystem: Register plugin is nil")
+// NewRegistry creates a new init system registry with the provided plugins
+func NewRegistry(plugins ...InitSystem) *Registry {
+	r := &Registry{plugins: make(map[string]InitSystem)}
+	for _, p := range plugins {
+		r.plugins[p.Name()] = p
 	}
-	if _, dup := plugins[name]; dup {
-		panic("initsystem: Register called twice for plugin " + name)
-	}
-	plugins[name] = plugin
+	return r
 }
 
 // Get returns a registered init system plugin by name.
-func Get(name string) (InitSystem, bool) {
-	p, ok := plugins[name]
+func (r *Registry) Get(name string) (InitSystem, bool) {
+	p, ok := r.plugins[name]
 	return p, ok
 }
 
 // Detect iterates over all registered plugins and returns the name of the first one that detects itself.
-func Detect() string {
-	for name, plugin := range plugins {
+func (r *Registry) Detect() string {
+	for name, plugin := range r.plugins {
 		if plugin.Detect() {
 			return name
 		}

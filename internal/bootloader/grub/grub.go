@@ -24,8 +24,8 @@ type GrubPlugin struct {
 	// Add config for the grub plugin here
 }
 
-func init() {
-	bootloader.Register("grub", &GrubPlugin{})
+func New() *GrubPlugin {
+	return &GrubPlugin{}
 }
 
 func (p *GrubPlugin) Name() string {

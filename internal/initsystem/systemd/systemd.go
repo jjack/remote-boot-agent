@@ -2,8 +2,6 @@ package systemd
 
 import (
 	"os"
-
-	"github.com/jjack/remote-boot-agent/internal/initsystem"
 )
 
 const SYSTEMD_PATH = "/run/systemd/system"
@@ -12,8 +10,8 @@ type SystemdPlugin struct {
 	// configuration fields
 }
 
-func init() {
-	initsystem.Register("systemd", &SystemdPlugin{})
+func New() *SystemdPlugin {
+	return &SystemdPlugin{}
 }
 
 func (p *SystemdPlugin) Name() string {
