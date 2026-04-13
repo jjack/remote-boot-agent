@@ -9,11 +9,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/jjack/remote-boot-agent/pkg/bootloader"
-	_ "github.com/jjack/remote-boot-agent/pkg/bootloader/grub"
-	"github.com/jjack/remote-boot-agent/pkg/config"
-	"github.com/jjack/remote-boot-agent/pkg/initsystem"
-	_ "github.com/jjack/remote-boot-agent/pkg/initsystem/systemd"
+	"github.com/jjack/remote-boot-agent/internal/bootloader"
+	_ "github.com/jjack/remote-boot-agent/internal/bootloader/grub"
+	"github.com/jjack/remote-boot-agent/internal/config"
+	"github.com/jjack/remote-boot-agent/internal/initsystem"
+	_ "github.com/jjack/remote-boot-agent/internal/initsystem/systemd"
 	"github.com/spf13/cobra"
 )
 

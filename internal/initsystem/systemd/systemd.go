@@ -3,7 +3,7 @@ package systemd
 import (
 	"os"
 
-	"github.com/jjack/remote-boot-agent/pkg/initsystem"
+	"github.com/jjack/remote-boot-agent/internal/initsystem"
 )
 
 const SYSTEMD_PATH = "/run/systemd/system"

@@ -1,6 +1,6 @@
 package bootloader
 
-import "github.com/jjack/remote-boot-agent/pkg/config"
+import "github.com/jjack/remote-boot-agent/internal/config"
 
 // BootOptions represents the parsed boot configuration.
 type BootOptions struct {

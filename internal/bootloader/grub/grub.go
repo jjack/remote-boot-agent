@@ -8,8 +8,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/jjack/remote-boot-agent/pkg/bootloader"
-	"github.com/jjack/remote-boot-agent/pkg/config"
+	"github.com/jjack/remote-boot-agent/internal/bootloader"
+	"github.com/jjack/remote-boot-agent/internal/config"
 )
 
 var GRUB_PATHS = []string{
