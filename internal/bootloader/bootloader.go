@@ -9,8 +9,8 @@ type BootOptions struct {
 	// Add other relevant fields
 }
 
-// Bootloader defines the interface for all bootloader plugins.
-type Bootloader interface {
+// Plugin defines the interface for all bootloader plugins.
+type Plugin interface {
 	// Name returns the name of the bootloader plugin.
 	Name() string
 	// Detect returns true if this bootloader is detected as the active/available one on the system.
@@ -22,12 +22,12 @@ type Bootloader interface {
 
 // Registry manages the available bootloader plugins
 type Registry struct {
-	plugins map[string]Bootloader
+	plugins map[string]Plugin
 }
 
 // NewRegistry creates a new bootloader registry with the provided plugins
-func NewRegistry(plugins ...Bootloader) *Registry {
-	r := &Registry{plugins: make(map[string]Bootloader)}
+func NewRegistry(plugins ...Plugin) *Registry {
+	r := &Registry{plugins: make(map[string]Plugin)}
 	for _, p := range plugins {
 		r.plugins[p.Name()] = p
 	}
@@ -35,7 +35,7 @@ func NewRegistry(plugins ...Bootloader) *Registry {
 }
 
 // Get returns a registered bootloader plugin by name.
-func (r *Registry) Get(name string) (Bootloader, bool) {
+func (r *Registry) Get(name string) (Plugin, bool) {
 	p, ok := r.plugins[name]
 	return p, ok
 }
