@@ -21,8 +21,9 @@ type HostConfig struct {
 }
 
 type HAConfig struct {
-	BaseURL string `mapstructure:"url"`
-	Token   string `mapstructure:"token"`
+	BaseURL   string `mapstructure:"url"`
+	Token     string `mapstructure:"token"`
+	WebhookID string `mapstructure:"webhook_id"`
 }
 
 func InitFlags(flags *pflag.FlagSet) {
@@ -34,6 +35,7 @@ func InitFlags(flags *pflag.FlagSet) {
 
 	flags.String("homeassistant-url", "", "Home Assistant Base URL")
 	flags.String("homeassistant-token", "", "Home Assistant Long-Lived Access Token")
+	flags.String("homeassistant-webhook-id", "remote_boot_manager_ingest", "Home Assistant Webhook ID")
 }
 
 // Load reads and parses configuration for the CLI application
@@ -46,6 +48,9 @@ func Load(flags *pflag.FlagSet) (*Config, error) {
 	v.BindPFlag("host.hostname", flags.Lookup("hostname"))
 	v.BindPFlag("homeassistant.url", flags.Lookup("homeassistant-url"))
 	v.BindPFlag("homeassistant.token", flags.Lookup("homeassistant-token"))
+	v.BindPFlag("homeassistant.webhook_id", flags.Lookup("homeassistant-webhook-id"))
+
+	v.SetDefault("homeassistant.webhook_id", "remote_boot_manager_ingest")
 
 	cfgFile, _ := flags.GetString("config")
 	if cfgFile != "" {

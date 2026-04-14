@@ -19,14 +19,20 @@ type HAPayload struct {
 }
 
 type Client struct {
-	BaseURL string
-	Token   string
+	BaseURL   string
+	Token     string
+	WebhookID string
 }
 
 func NewClient(cfg config.HAConfig) *Client {
+	webhookID := cfg.WebhookID
+	if webhookID == "" {
+		webhookID = "remote_boot_manager_ingest"
+	}
 	return &Client{
-		BaseURL: strings.TrimRight(cfg.BaseURL, "/"),
-		Token:   cfg.Token,
+		BaseURL:   strings.TrimRight(cfg.BaseURL, "/"),
+		Token:     cfg.Token,
+		WebhookID: webhookID,
 	}
 }
 
@@ -58,7 +64,7 @@ func (c *Client) GetSelectedOS(mac string) (string, error) {
 }
 
 func (c *Client) PushAvailableOSes(payload HAPayload) error {
-	endpoint := fmt.Sprintf("%s/api/webhook/remote_boot_manager_ingest", c.BaseURL)
+	endpoint := fmt.Sprintf("%s/api/webhook/%s", c.BaseURL, c.WebhookID)
 	
 	jsonData, err := json.Marshal(payload)
 	if err != nil {

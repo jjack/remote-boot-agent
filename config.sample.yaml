@@ -7,4 +7,4 @@
 
 homeassistant:
   url: "https://homeassistant.local:8123"
-  token: "your_long_lived_access_token"
+  webhook_id: "remote_boot_agent_webhook"
