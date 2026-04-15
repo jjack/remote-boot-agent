@@ -7,9 +7,12 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/jjack/remote-boot-agent/internal/config"
 )
+
+const HTTP_CLIENT_TIMEOUT = 10 * time.Second
 
 type HAPayload struct {
 	MACAddress string   `json:"mac_address"`
@@ -19,8 +22,9 @@ type HAPayload struct {
 }
 
 type Client struct {
-	BaseURL   string
-	WebhookID string
+	BaseURL    string
+	WebhookID  string
+	HTTPClient *http.Client
 }
 
 func NewClient(cfg config.HAConfig) *Client {
@@ -29,8 +33,9 @@ func NewClient(cfg config.HAConfig) *Client {
 		webhookID = "remote_boot_manager_ingest"
 	}
 	return &Client{
-		BaseURL:   strings.TrimRight(cfg.BaseURL, "/"),
-		WebhookID: webhookID,
+		BaseURL:    strings.TrimRight(cfg.BaseURL, "/"),
+		WebhookID:  webhookID,
+		HTTPClient: &http.Client{Timeout: HTTP_CLIENT_TIMEOUT},
 	}
 }
 
@@ -41,7 +46,7 @@ func (c *Client) GetSelectedOS(mac string) (string, error) {
 		return "", fmt.Errorf("error creating request: %w", err)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("error communicating with Home Assistant: %w", err)
 	}
@@ -71,7 +76,7 @@ func (c *Client) PushAvailableOSes(payload HAPayload) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("error posting to Home Assistant: %w", err)
 	}
