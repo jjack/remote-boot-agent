@@ -1,7 +1,7 @@
 package initsystem
 
-// InitSystem defines the interface for init system plugins.
-type InitSystem interface {
+// Plugin defines the interface for init system plugins.
+type Plugin interface {
 	Name() string
 	// Detect returns true if this init system is active on the host
 	Detect() bool
@@ -10,12 +10,12 @@ type InitSystem interface {
 
 // Registry manages the available initsystem plugins
 type Registry struct {
-	plugins map[string]InitSystem
+	plugins map[string]Plugin
 }
 
 // NewRegistry creates a new init system registry with the provided plugins
-func NewRegistry(plugins ...InitSystem) *Registry {
-	r := &Registry{plugins: make(map[string]InitSystem)}
+func NewRegistry(plugins ...Plugin) *Registry {
+	r := &Registry{plugins: make(map[string]Plugin)}
 	for _, p := range plugins {
 		r.plugins[p.Name()] = p
 	}
@@ -23,7 +23,7 @@ func NewRegistry(plugins ...InitSystem) *Registry {
 }
 
 // Get returns a registered init system plugin by name.
-func (r *Registry) Get(name string) (InitSystem, bool) {
+func (r *Registry) Get(name string) (Plugin, bool) {
 	p, ok := r.plugins[name]
 	return p, ok
 }
