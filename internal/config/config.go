@@ -14,6 +14,8 @@ type Config struct {
 	Host          HostConfig `mapstructure:"host"`
 }
 
+const DefaultWebhookID = "remote_boot_manager_ingest"
+
 type HostConfig struct {
 	Bootloader           string `mapstructure:"bootloader"`
 	BootloaderConfigPath string `mapstructure:"bootloader_config_path"`
@@ -36,7 +38,7 @@ func InitFlags(flags *pflag.FlagSet) {
 	flags.String("hostname", "", "Hostname of the device (optional, will be auto-detected if not provided)")
 
 	flags.String("homeassistant-url", "", "Home Assistant Base URL")
-	flags.String("homeassistant-webhook-id", "remote_boot_manager_ingest", "Home Assistant Webhook ID")
+	flags.String("homeassistant-webhook-id", DefaultWebhookID, "Home Assistant Webhook ID")
 }
 
 // Load reads and parses configuration for the CLI application
@@ -59,7 +61,7 @@ func Load(flags *pflag.FlagSet) (*Config, error) {
 		}
 	}
 
-	v.SetDefault("homeassistant.webhook_id", "remote_boot_manager_ingest")
+	v.SetDefault("homeassistant.webhook_id", DefaultWebhookID)
 
 	cfgFile, err := flags.GetString("config")
 	if err != nil {

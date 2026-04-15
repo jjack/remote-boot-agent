@@ -30,7 +30,7 @@ type Client struct {
 func NewClient(cfg config.HAConfig) *Client {
 	webhookID := cfg.WebhookID
 	if webhookID == "" {
-		webhookID = "remote_boot_manager_ingest"
+		webhookID = config.DefaultWebhookID
 	}
 	return &Client{
 		BaseURL:    strings.TrimRight(cfg.BaseURL, "/"),
