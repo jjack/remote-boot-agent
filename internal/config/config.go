@@ -42,17 +42,29 @@ func InitFlags(flags *pflag.FlagSet) {
 func Load(flags *pflag.FlagSet) (*Config, error) {
 	v := viper.New()
 
-	v.BindPFlag("host.bootloader", flags.Lookup("bootloader"))
-	v.BindPFlag("host.bootloader_config_path", flags.Lookup("bootloader-config-path"))
-	v.BindPFlag("host.initsystem", flags.Lookup("init-system"))
-	v.BindPFlag("host.mac_address", flags.Lookup("mac-address"))
-	v.BindPFlag("host.hostname", flags.Lookup("hostname"))
-	v.BindPFlag("homeassistant.url", flags.Lookup("homeassistant-url"))
-	v.BindPFlag("homeassistant.webhook_id", flags.Lookup("homeassistant-webhook-id"))
+	bindings := map[string]string{
+		"host.bootloader":              "bootloader",
+		"host.bootloader_config_path":  "bootloader-config-path",
+		"host.initsystem":              "init-system",
+		"host.mac_address":             "mac-address",
+		"host.hostname":                "hostname",
+		"homeassistant.url":            "homeassistant-url",
+		"homeassistant.webhook_id":     "homeassistant-webhook-id",
+	}
+
+	for key, flag := range bindings {
+		if err := v.BindPFlag(key, flags.Lookup(flag)); err != nil {
+			return nil, fmt.Errorf("error binding %s flag: %w", flag, err)
+		}
+	}
 
 	v.SetDefault("homeassistant.webhook_id", "remote_boot_manager_ingest")
 
-	cfgFile, _ := flags.GetString("config")
+	cfgFile, err := flags.GetString("config")
+	if err != nil {
+		return nil, fmt.Errorf("error reading config flag: %w", err)
+	}
+
 	if cfgFile != "" {
 		// Use config file from the flag
 		v.SetConfigFile(cfgFile)
