@@ -23,9 +23,20 @@ func setDefaults(cfg *config.Config, blReg *bootloader.Registry, initReg *initsy
 }
 
 func buildCommands(blReg *bootloader.Registry, initReg *initsystem.Registry) *cobra.Command {
+	var loadedConfig *config.Config
+
 	var rootCmd = &cobra.Command{
 		Use:   "remote-boot-agent",
 		Short: "remote-boot-agent reads boot configurations and posts them to Home Assistant",
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.Load(cmd.Flags())
+			if err != nil {
+				return fmt.Errorf("error loading config: %w", err)
+			}
+			setDefaults(cfg, blReg, initReg)
+			loadedConfig = cfg
+			return nil
+		},
 	}
 	config.InitFlags(rootCmd.PersistentFlags())
 
@@ -33,14 +44,8 @@ func buildCommands(blReg *bootloader.Registry, initReg *initsystem.Registry) *co
 		Use:   "get-selected-os",
 		Short: "Output the currently selected OS from Home Assistant",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load(cmd.Flags())
-			if err != nil {
-				return fmt.Errorf("error loading config: %w", err)
-			}
-			setDefaults(cfg, blReg, initReg)
-
-			haClient := homeassistant.NewClient(cfg.HomeAssistant)
-			osName, err := haClient.GetSelectedOS(cfg.Host.MACAddress)
+			haClient := homeassistant.NewClient(loadedConfig.HomeAssistant)
+			osName, err := haClient.GetSelectedOS(loadedConfig.Host.MACAddress)
 			if err != nil {
 				return err
 			}
@@ -53,18 +58,12 @@ func buildCommands(blReg *bootloader.Registry, initReg *initsystem.Registry) *co
 		Use:   "get-available-oses",
 		Short: "Output the list of available OSes from the bootloader",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load(cmd.Flags())
-			if err != nil {
-				return fmt.Errorf("error loading config: %w", err)
-			}
-			setDefaults(cfg, blReg, initReg)
-
-			bl, ok := blReg.Get(cfg.Host.Bootloader)
+			bl, ok := blReg.Get(loadedConfig.Host.Bootloader)
 			if !ok {
-				return fmt.Errorf("bootloader plugin %q not found or not registered", cfg.Host.Bootloader)
+				return fmt.Errorf("bootloader plugin %q not found or not registered", loadedConfig.Host.Bootloader)
 			}
 
-			opts, err := bl.Parse(cfg)
+			opts, err := bl.Parse(loadedConfig)
 			if err != nil {
 				return fmt.Errorf("error parsing bootloader config: %w", err)
 			}
@@ -80,27 +79,21 @@ func buildCommands(blReg *bootloader.Registry, initReg *initsystem.Registry) *co
 		Use:   "push-available-oses",
 		Short: "Push the list of available OSes to Home Assistant",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load(cmd.Flags())
-			if err != nil {
-				return fmt.Errorf("error loading config: %w", err)
-			}
-			setDefaults(cfg, blReg, initReg)
-
-			bl, ok := blReg.Get(cfg.Host.Bootloader)
+			bl, ok := blReg.Get(loadedConfig.Host.Bootloader)
 			if !ok {
-				return fmt.Errorf("bootloader plugin %q not found or not registered", cfg.Host.Bootloader)
+				return fmt.Errorf("bootloader plugin %q not found or not registered", loadedConfig.Host.Bootloader)
 			}
 
-			opts, err := bl.Parse(cfg)
+			opts, err := bl.Parse(loadedConfig)
 			if err != nil {
 				return fmt.Errorf("error parsing bootloader config: %w", err)
 			}
 
-			haClient := homeassistant.NewClient(cfg.HomeAssistant)
+			haClient := homeassistant.NewClient(loadedConfig.HomeAssistant)
 			payload := homeassistant.HAPayload{
-				MACAddress: cfg.Host.MACAddress,
-				Hostname:   cfg.Host.Hostname,
-				Bootloader: cfg.Host.Bootloader,
+				MACAddress: loadedConfig.Host.MACAddress,
+				Hostname:   loadedConfig.Host.Hostname,
+				Bootloader: loadedConfig.Host.Bootloader,
 				OSList:     opts.AvailableOSes,
 			}
 
