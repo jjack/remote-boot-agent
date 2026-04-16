@@ -8,7 +8,7 @@ import (
 
 func GetOSList(cli *CLI) *cobra.Command {
 	return &cobra.Command{
-		Use:   "display",
+		Use:   "list",
 		Short: "Output the list of available OSes from the bootloader",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			bl, err := ResolveBootloader(cli.Config)
