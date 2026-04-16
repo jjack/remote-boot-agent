@@ -1,0 +1,13 @@
+[Unit]
+Description=Push remote boot state to Home Assistant on shutdown
+DefaultDependencies=no
+Before=shutdown.target reboot.target halt.target network-online.target
+Requires=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/remote-boot-agent push --config /etc/remote-boot-agent/config.yaml
+TimeoutSec=10
+
+[Install]
+WantedBy=halt.target reboot.target poweroff.target
