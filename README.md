@@ -1,16 +1,30 @@
-# HA-Boot-Manager
+# Remote Boot Agent
 
-`ha-boot-manager` is a Go-based monorepo designed to manage bare-metal OS booting and selection via Home Assistant, MQTT, and Wake-on-LAN (WOL). It allows a user to remotely select an operating system for a specific server via a Home Assistant dropdown, send a WOL packet, and have the server dynamically boot into the chosen OS.
+![GitHub](https://img.shields.io/github/license/jjack/remote-boot-agent)
+![GitHub Repo stars](https://img.shields.io/github/stars/jjack/remote-boot-agent)
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/jjack/remote-boot-agent)
+[![GO Tests and Coverage](https://github.com/jjack/remote-boot-agent/actions/workflows/test.yml/badge.svg)](https://github.com/jjack/remote-boot-agent/actions/workflows/test.yml)
+[![CodeQL](https://github.com/jjack/remote-boot-agent/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/jjack/remote-boot-agent/actions/workflows/github-code-scanning/codeql)
+
+![GitHub contributors](https://img.shields.io/github/contributors/jjack/remote-boot-agent)
+![Maintenance](https://img.shields.io/maintenance/yes/2026)
+![GitHub commit activity](https://img.shields.io/github/commit-activity/y/jjack/remote-boot-agent)
+![GitHub last commit](https://img.shields.io/github/last-commit/jjack/remote-boot-agent/main)
+![Codecov branch](https://img.shields.io/codecov/c/github/jjack/remote-boot-agent)
+
+`remote-boot-agent` is a Go-based agent designed to manage bare-metal OS booting and selection via Home Assistant and Wake-on-LAN (WOL). It allows a user to remotely select an operating system for a specific server via a Home Assistant dropdown, send a WOL packet, and have the server dynamically boot into the chosen OS.
 
 ## Core Architecture
 
-The system is built with a strictly pluggable architecture in mind. While GRUB and systemd are the default implementations, the CLI and core logic are agnostic to the underlying bootloader and init system. They should (hopefully!) be adaptable to other systems.
+The system is built with a strictly pluggable architecture in mind. While `grub` and `systemd` are the default implementations, the CLI and core logic are agnostic to the underlying bootloader and init system. This _should_ be adaptable to any other bootloader that has a networking stack as well as systems other than Home Assistant.
 
-### `remote-boot-agent`
-#### Lightweight CLI that runs on each bare-metal server at shutdown time
-- Parses the local boot menu to report available OS options to Home Assistant
+After installation, whenever your server shuts down, `remote-boot-agent` will read the available boot options and push them to Home Assistant through a webhook. After selecting an option in Home Assistant, you can either press the "Wake" button or just power the machine on normally. It will then boot with your newly selected options.
 
-## Repo Structure
+## Requirements
+
+- [Home Assistant](https://www.home-assistant.io/)
+- [Home Assistant Remote Boot Manager](https://github.com/jjack/remote-boot-agent)
+- a Linux bootloader with a networking stack (ie - `grub`)
 
 ## Getting Started
 
