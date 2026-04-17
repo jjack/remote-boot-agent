@@ -27,8 +27,8 @@ func TestCLI_PersistentPreRun(t *testing.T) {
 		"--hostname", "override-host",
 		"--bootloader", "override-bl",
 		"--bootloader-config", "override-bl-cfg",
-		"--ha-url", "http://override-ha",
-		"--ha-webhook", "override-webhook",
+		"--hass-url", "http://override-ha",
+		"--hass-webhook", "override-webhook",
 	})
 
 	var b bytes.Buffer

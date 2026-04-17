@@ -39,10 +39,10 @@ func NewCLI() *CLI {
 			if blConfig, _ := cmd.Flags().GetString("bootloader-config"); blConfig != "" {
 				cfg.Bootloader.ConfigPath = blConfig
 			}
-			if haURL, _ := cmd.Flags().GetString("ha-url"); haURL != "" {
+			if haURL, _ := cmd.Flags().GetString("hass-url"); haURL != "" {
 				cfg.HomeAssistant.URL = haURL
 			}
-			if haWebhook, _ := cmd.Flags().GetString("ha-webhook"); haWebhook != "" {
+			if haWebhook, _ := cmd.Flags().GetString("hass-webhook"); haWebhook != "" {
 				cfg.HomeAssistant.WebhookID = haWebhook
 			}
 
@@ -72,8 +72,8 @@ func NewCLI() *CLI {
 	rootCmd.PersistentFlags().String("hostname", "", "Hostname override")
 	rootCmd.PersistentFlags().String("bootloader", "", "Bootloader override (e.g., grub)")
 	rootCmd.PersistentFlags().String("bootloader-config", "", "Bootloader config path override")
-	rootCmd.PersistentFlags().String("ha-url", "", "Home Assistant URL override")
-	rootCmd.PersistentFlags().String("ha-webhook", "", "Home Assistant Webhook ID override")
+	rootCmd.PersistentFlags().String("hass-url", "", "Home Assistant URL override")
+	rootCmd.PersistentFlags().String("hass-webhook", "", "Home Assistant Webhook ID override")
 
 	rootCmd.AddCommand(GetBootOptions(cli))
 	rootCmd.AddCommand(PushBootOptions(cli))
