@@ -1,17 +1,16 @@
 package config
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 )
 
-func TestLoadConfig(t *testing.T) {
+func TestLoad(t *testing.T) {
 	configPath := filepath.Join("..", "..", "config.sample.yaml")
 
-	cfg, err := LoadConfig(configPath)
+	cfg, err := Load(configPath)
 	if err != nil {
-		t.Fatalf("LoadConfig failed: %v", err)
+		t.Fatalf("Load failed: %v", err)
 	}
 
 	if cfg.Host.MACAddress != "00:11:22:33:44:55" {
@@ -34,20 +33,41 @@ func TestLoadConfig(t *testing.T) {
 	}
 }
 
-func TestLoadConfigDefaults(t *testing.T) {
+func TestSave(t *testing.T) {
 	tempDir := t.TempDir()
-	configPath := filepath.Join(tempDir, "empty.yaml")
-	_ = os.WriteFile(configPath, []byte(""), 0644)
+	configPath := filepath.Join(tempDir, "test_config.yaml")
 
-	cfg, err := LoadConfig(configPath)
+	cfg := &Config{
+		Host: HostConfig{
+			MACAddress: "00:11:22:33:44:55",
+			Hostname:   "test-host",
+		},
+		HomeAssistant: HomeAssistantConfig{
+			URL:       "http://localhost:8123",
+			WebhookID: "test_webhook",
+		},
+	}
+
+	err := Save(cfg, configPath)
 	if err != nil {
-		t.Fatalf("LoadConfig with temp path failed: %v", err)
+		t.Fatalf("Save failed: %v", err)
 	}
 
-	if cfg.HomeAssistant.URL != "http://homeassistant.local:8123" {
-		t.Errorf("expected default HA URL, got %s", cfg.HomeAssistant.URL)
+	savedCfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load saved config failed: %v", err)
 	}
-	if cfg.HomeAssistant.WebhookID != "remote_boot_manager_ingest" {
-		t.Errorf("expected default Webhook ID, got %s", cfg.HomeAssistant.WebhookID)
+
+	if savedCfg.Host.MACAddress != cfg.Host.MACAddress {
+		t.Errorf("expected MAC %s, got %s", cfg.Host.MACAddress, savedCfg.Host.MACAddress)
+	}
+	if savedCfg.Host.Hostname != cfg.Host.Hostname {
+		t.Errorf("expected Hostname %s, got %s", cfg.Host.Hostname, savedCfg.Host.Hostname)
+	}
+	if savedCfg.HomeAssistant.URL != cfg.HomeAssistant.URL {
+		t.Errorf("expected HA URL %s, got %s", cfg.HomeAssistant.URL, savedCfg.HomeAssistant.URL)
+	}
+	if savedCfg.HomeAssistant.WebhookID != cfg.HomeAssistant.WebhookID {
+		t.Errorf("expected HA Webhook %s, got %s", cfg.HomeAssistant.WebhookID, savedCfg.HomeAssistant.WebhookID)
 	}
 }
