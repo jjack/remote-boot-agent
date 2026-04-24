@@ -3,13 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	ha "github.com/jjack/remote-boot-agent/internal/homeassistant"
-
 	"github.com/spf13/cobra"
 )
 
-func GetSelectedBootOption(cli *CLI) *cobra.Command {
+func NewGetRemoteBootOption(cli *CLI) *cobra.Command {
 	return &cobra.Command{
 		Use:   "get",
 		Short: "Output the currently selected boot option from Home Assistant",
@@ -24,7 +24,7 @@ func GetSelectedBootOption(cli *CLI) *cobra.Command {
 			}
 
 			haClient := ha.NewClient(cli.Config.HomeAssistant.URL, cli.Config.HomeAssistant.WebhookID)
-			fmt.Printf("Fetching netboot configuration for hostname %s using bootloader %s...\n", cli.Config.Host.Hostname, bl.Name())
+			slog.Debug("Fetching netboot configuration for hostname %s using bootloader %s...\n", cli.Config.Host.Hostname, bl.Name())
 
 			response, err := haClient.View(context.Background(), bl.Name(), cli.Config.Host.MACAddress)
 			if err != nil {
