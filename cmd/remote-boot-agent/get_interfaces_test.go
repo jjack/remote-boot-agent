@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/charmbracelet/huh"
+	"charm.land/huh/v2"
 )
 
 func TestGetInterfaces_ReturnsOptions(t *testing.T) {
