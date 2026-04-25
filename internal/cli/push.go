@@ -15,13 +15,13 @@ func NewPushCmd(deps *CommandDeps) *cobra.Command {
 		Use:   "push",
 		Short: "Push the list of available OSes to Home Assistant",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			bl, err := deps.Bootloader()
+			bl, err := deps.Bootloader(cmd.Context())
 			if err != nil {
 				return err
 			}
 
 			blCfg := deps.Config.Bootloader
-			bootOptions, err := bl.GetBootOptions(bootloader.Config{
+			bootOptions, err := bl.GetBootOptions(cmd.Context(), bootloader.Config{
 				ConfigPath: blCfg.ConfigPath,
 			})
 			if err != nil {

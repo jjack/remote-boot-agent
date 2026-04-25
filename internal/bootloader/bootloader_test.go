@@ -1,6 +1,7 @@
 package bootloader
 
 import (
+	"context"
 	"testing"
 )
 
@@ -28,7 +29,7 @@ func TestDetectBootloader_Fail(t *testing.T) {
 	// Empty registry
 	registry := NewRegistry()
 
-	bl, err := registry.Detect()
+	bl, err := registry.Detect(context.Background())
 	if err == nil {
 		t.Fatal("expected error detecting bootloader with empty registry, got nil")
 	}
@@ -40,11 +41,11 @@ func TestDetectBootloader_Fail(t *testing.T) {
 func TestExampleBootloader(t *testing.T) {
 	bl := NewExample()
 
-	if !bl.IsActive() {
+	if !bl.IsActive(context.Background()) {
 		t.Error("expected example bootloader to be active")
 	}
 
-	bootOptions, err := bl.GetBootOptions(Config{})
+	bootOptions, err := bl.GetBootOptions(context.Background(), Config{})
 	if err != nil {
 		t.Fatalf("expected no error from example GetBootOptions relative to config path, got %v", err)
 	}
@@ -59,7 +60,7 @@ func TestDetectBootloader(t *testing.T) {
 	registry.Register("example", NewExample)
 
 	// 'example' always returns true for IsActive()
-	bl, err := registry.Detect()
+	bl, err := registry.Detect(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error detecting bootloader: %v", err)
 	}

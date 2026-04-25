@@ -1,6 +1,7 @@
 package bootloader
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -23,9 +24,9 @@ func TestGrubBootloader(t *testing.T) {
 	defer func() { grubPaths = originalPaths }()
 	grubPaths = []string{testDataPath}
 
-	bootOptions, err := bl.GetBootOptions(Config{ConfigPath: testDataPath})
+	bootOptions, err := bl.GetBootOptions(context.Background(), Config{ConfigPath: testDataPath})
 
-	if !bl.IsActive() {
+	if !bl.IsActive(context.Background()) {
 		t.Error("expected grub bootloader to be logically active")
 	}
 
@@ -57,7 +58,7 @@ func TestGrubBootloader(t *testing.T) {
 
 func TestGrubBootloader_FileNotFound(t *testing.T) {
 	bl := NewGrub()
-	_, err := bl.GetBootOptions(Config{ConfigPath: "/tmp/nonexistent/grub.cfg"})
+	_, err := bl.GetBootOptions(context.Background(), Config{ConfigPath: "/tmp/nonexistent/grub.cfg"})
 	if err == nil {
 		t.Fatal("expected error on nonexistent grub config, got nil")
 	}
@@ -77,7 +78,7 @@ func TestGrubBootloader_AutoDiscovery(t *testing.T) {
 	defer func() { grubPaths = originalPaths }()
 	grubPaths = []string{fakeGrubPath}
 
-	bootOptions, err := bl.GetBootOptions(Config{})
+	bootOptions, err := bl.GetBootOptions(context.Background(), Config{})
 	if err != nil {
 		t.Fatalf("expected auto-discovery to find grub config without error, got: %v", err)
 	}
@@ -94,7 +95,7 @@ func TestGrubBootloader_AutoDiscovery_Fail(t *testing.T) {
 	defer func() { grubPaths = originalPaths }()
 	grubPaths = []string{"/tmp/definitely-do-not-exist"}
 
-	_, err := bl.GetBootOptions(Config{})
+	_, err := bl.GetBootOptions(context.Background(), Config{})
 	if err == nil {
 		t.Fatal("expected failure to find any grub config")
 	}
@@ -109,7 +110,7 @@ func TestGrubBootloader_RealConfig(t *testing.T) {
 		t.Skipf("Real grub.cfg not found at %s, skipping test", testDataPath)
 	}
 
-	bootOptions, err := bl.GetBootOptions(Config{ConfigPath: testDataPath})
+	bootOptions, err := bl.GetBootOptions(context.Background(), Config{ConfigPath: testDataPath})
 	if err != nil {
 		t.Fatalf("failed to parse real grub config: %v", err)
 	}

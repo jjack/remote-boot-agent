@@ -1,5 +1,7 @@
 package bootloader
 
+import "context"
+
 const exampleBootloader = "example"
 
 type Example struct{}
@@ -8,12 +10,12 @@ func NewExample() Bootloader {
 	return &Example{}
 }
 
-func (s *Example) IsActive() bool {
+func (s *Example) IsActive(ctx context.Context) bool {
 	// you should implement your own logic here to determine if this bootloader is active
 	return true
 }
 
-func (s *Example) GetBootOptions(cfg Config) ([]string, error) {
+func (s *Example) GetBootOptions(ctx context.Context, cfg Config) ([]string, error) {
 	return []string{"Ubuntu", "Windows"}, nil
 }
 

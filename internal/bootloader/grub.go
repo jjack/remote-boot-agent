@@ -2,6 +2,7 @@ package bootloader
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -34,7 +35,7 @@ func (g *Grub) Name() string {
 	return grubBootloader
 }
 
-func (g *Grub) IsActive() bool {
+func (g *Grub) IsActive(ctx context.Context) bool {
 	_, err := findGrubConfig()
 	return err == nil
 }
@@ -86,7 +87,7 @@ func countStructuralBraces(line string) (int, int) {
 	return opens, closes
 }
 
-func (g *Grub) GetBootOptions(cfg Config) ([]string, error) {
+func (g *Grub) GetBootOptions(ctx context.Context, cfg Config) ([]string, error) {
 	slog.Debug("Parsing GRUB boot options...")
 
 	var grubPath string

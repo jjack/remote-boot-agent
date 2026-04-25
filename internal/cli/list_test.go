@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -13,9 +14,9 @@ import (
 
 type mockListBootloader struct{}
 
-func (m *mockListBootloader) Name() string   { return "example" }
-func (m *mockListBootloader) IsActive() bool { return true }
-func (m *mockListBootloader) GetBootOptions(cfg bootloader.Config) ([]string, error) {
+func (m *mockListBootloader) Name() string                      { return "example" }
+func (m *mockListBootloader) IsActive(ctx context.Context) bool { return true }
+func (m *mockListBootloader) GetBootOptions(ctx context.Context, cfg bootloader.Config) ([]string, error) {
 	return []string{"Ubuntu", "Windows"}, nil
 }
 
@@ -62,9 +63,9 @@ func TestGetBootOptionsCommand(t *testing.T) {
 
 type mockListBootloaderErr struct{}
 
-func (m *mockListBootloaderErr) Name() string   { return "err" }
-func (m *mockListBootloaderErr) IsActive() bool { return true }
-func (m *mockListBootloaderErr) GetBootOptions(cfg bootloader.Config) ([]string, error) {
+func (m *mockListBootloaderErr) Name() string                      { return "err" }
+func (m *mockListBootloaderErr) IsActive(ctx context.Context) bool { return true }
+func (m *mockListBootloaderErr) GetBootOptions(ctx context.Context, cfg bootloader.Config) ([]string, error) {
 	return nil, errors.New("mock error")
 }
 
@@ -92,9 +93,9 @@ func TestGetBootOptionsCommand_BootloaderError(t *testing.T) {
 
 type mockListBootloaderEmpty struct{}
 
-func (m *mockListBootloaderEmpty) Name() string   { return "empty" }
-func (m *mockListBootloaderEmpty) IsActive() bool { return true }
-func (m *mockListBootloaderEmpty) GetBootOptions(cfg bootloader.Config) ([]string, error) {
+func (m *mockListBootloaderEmpty) Name() string                      { return "empty" }
+func (m *mockListBootloaderEmpty) IsActive(ctx context.Context) bool { return true }
+func (m *mockListBootloaderEmpty) GetBootOptions(ctx context.Context, cfg bootloader.Config) ([]string, error) {
 	return []string{}, nil
 }
 

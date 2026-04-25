@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"testing"
 
@@ -32,7 +33,7 @@ func TestResolveBootloader(t *testing.T) {
 	registry := bootloader.NewRegistry()
 	registry.Register("example", bootloader.NewExample)
 
-	bl, err := ResolveBootloader(cfg.Bootloader.Name, registry)
+	bl, err := ResolveBootloader(context.Background(), cfg.Bootloader.Name, registry)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -46,7 +47,7 @@ func TestResolveBootloader(t *testing.T) {
 			Name: "invalid-bootloader",
 		},
 	}
-	_, errInvalid := ResolveBootloader(cfgInvalid.Bootloader.Name, registry)
+	_, errInvalid := ResolveBootloader(context.Background(), cfgInvalid.Bootloader.Name, registry)
 	if errInvalid == nil {
 		t.Fatal("expected error for invalid bootloader")
 	}
@@ -58,7 +59,7 @@ func TestResolveBootloader(t *testing.T) {
 		},
 	}
 	// example always returns true for IsActive so Detect will find it
-	blDetect, errDetect := ResolveBootloader(cfgEmpty.Bootloader.Name, registry)
+	blDetect, errDetect := ResolveBootloader(context.Background(), cfgEmpty.Bootloader.Name, registry)
 	if errDetect != nil {
 		t.Fatalf("expected no error detecting, got %v", errDetect)
 	}
