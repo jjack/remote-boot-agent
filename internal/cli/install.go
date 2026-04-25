@@ -31,8 +31,8 @@ func NewInstallCmd(deps *CommandDeps) *cobra.Command {
 			}
 
 			cfgFile, err := cmd.Flags().GetString("config")
-			if err != nil || cfgFile == "" {
-				cfgFile = "./config.yaml"
+			if err != nil {
+				return fmt.Errorf("failed to read config flag: %w", err)
 			}
 
 			absConfig, err := filepath.Abs(cfgFile)

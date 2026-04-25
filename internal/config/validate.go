@@ -41,16 +41,16 @@ func ValidateWebhookID(v string) error {
 
 func (c *Config) Validate() error {
 	if err := ValidateMACAddress(c.Host.MACAddress); err != nil {
-		return fmt.Errorf("invalid host mac_address: %w", err)
+		return err
 	}
 	if err := ValidateHostname(c.Host.Hostname); err != nil {
-		return fmt.Errorf("invalid host hostname: %w", err)
+		return err
 	}
 	if err := ValidateURL(c.HomeAssistant.URL); err != nil {
-		return fmt.Errorf("invalid homeassistant url: %w", err)
+		return err
 	}
 	if err := ValidateWebhookID(c.HomeAssistant.WebhookID); err != nil {
-		return fmt.Errorf("invalid homeassistant webhook_id: %w", err)
+		return err
 	}
 	return nil
 }

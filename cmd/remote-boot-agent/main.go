@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/jjack/remote-boot-agent/internal/cli"
@@ -10,7 +10,7 @@ import (
 func main() {
 	app := cli.NewCLI()
 	if err := app.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		slog.Error("Error executing command", "error", err)
 		os.Exit(1)
 	}
 }

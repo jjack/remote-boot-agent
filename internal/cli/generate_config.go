@@ -74,7 +74,7 @@ func NewGenerateConfigCmd(deps *CommandDeps) *cobra.Command {
 
 			fmt.Println("\nGenerated config (keys may be in a different order than shown here):")
 			fmt.Printf("---\n")
-			fmt.Printf("host:\n  hostname: %s\n  mac: %s\n", cfg.Host.Hostname, cfg.Host.MACAddress)
+			fmt.Printf("host:\n  hostname: %s\n  mac_address: %s\n", cfg.Host.Hostname, cfg.Host.MACAddress)
 			fmt.Printf("homeassistant:\n  url: %s\n  webhook_id: %s\n", cfg.HomeAssistant.URL, cfg.HomeAssistant.WebhookID)
 			fmt.Printf("bootloader:\n  name: %s\n  config_path: %s\n", cfg.Bootloader.Name, cfg.Bootloader.ConfigPath)
 			fmt.Printf("initsystem:\n  name: %s\n", cfg.InitSystem.Name)

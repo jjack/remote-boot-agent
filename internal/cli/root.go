@@ -66,7 +66,7 @@ func NewCLI() *CLI {
 		},
 	}
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ./config.yaml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "./config.yaml", "config file")
 	rootCmd.PersistentFlags().String("mac", "", "MAC Address override")
 	rootCmd.PersistentFlags().String("hostname", "", "Hostname override")
 	rootCmd.PersistentFlags().String("bootloader", "", "Bootloader type override (e.g., grub)")
