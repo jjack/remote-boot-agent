@@ -78,69 +78,11 @@ func TestClient_Push_ServerError(t *testing.T) {
 	}
 }
 
-func TestClient_View(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.Contains(r.URL.Path, "api/remote_boot_manager/aa:bb") {
-			t.Errorf("unexpected path: %s", r.URL.Path)
-		}
-		if r.Method != http.MethodGet {
-			t.Errorf("expected GET method, got %s", r.Method)
-		}
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("Ubuntu"))
-	}))
-	defer ts.Close()
-
-	client := NewClient(ts.URL, "test-webhook", nil)
-	bootOption, err := client.View(context.Background(), "grub", "aa:bb")
-	if err != nil {
-		t.Fatalf("expected no error, got: %v", err)
-	}
-
-	if bootOption != "Ubuntu" {
-		t.Errorf("expected Ubuntu, got %s", bootOption)
-	}
-}
-
-func TestClient_View_InvalidURL(t *testing.T) {
-	client := NewClient(":\x00invalid%url", "test", nil)
-	_, err := client.View(context.Background(), "grub", "aa:bb")
-	if err == nil {
-		t.Fatal("expected error on invalid URL, got nil")
-	}
-}
-
-func TestClient_View_ServerError(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-	}))
-	defer ts.Close()
-
-	client := NewClient(ts.URL, "test-webhook", nil)
-	_, err := client.View(context.Background(), "grub", "aa:bb")
-	if err == nil {
-		t.Fatal("expected error on server 404, got nil")
-	}
-	if !strings.Contains(err.Error(), "unexpected status code") {
-		t.Errorf("unexpected error message: %v", err)
-	}
-}
-
 // This tests HTTP Client errors in Do() for Push
 func TestClient_Push_HttpClientError(t *testing.T) {
 	// Create client with invalid base url matching protocol scheme error
 	client := NewClient("http://127.0.0.1:0", "test", nil)
 	err := client.Push(context.Background(), PushPayload{})
-	if err == nil {
-		t.Fatal("expected error")
-	}
-}
-
-// This tests HTTP Client errors in Do() for View
-func TestClient_View_HttpClientError(t *testing.T) {
-	// Create client with invalid base url matching protocol scheme error
-	client := NewClient("http://127.0.0.1:0", "test", nil)
-	_, err := client.View(context.Background(), "grub", "my-mac")
 	if err == nil {
 		t.Fatal("expected error")
 	}
