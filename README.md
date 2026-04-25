@@ -30,29 +30,15 @@ After installation, whenever your server shuts down, `remote-boot-agent` will re
 
 ### Installation & Deployment
 
-You can deploy the `remote-boot-agent` using Ansible or via manual installation.
+You can install `remote-boot-agent` using the pre-built packages or binaries from the Releases page.
 
-#### Ansible (Recommended)
-An extensible set of Ansible playbooks and roles are provided in the `ansible/` directory.
+**1. Install the Package**
 
-To run the deployment playbook against a target node:
+Download the appropriate package for your system from the Releases page.
+
+For Debian/Ubuntu:
 ```bash
-ansible-playbook -i your_inventory.ini ansible/deploy.yml \
-  -e ha_protocol=http \
-  -e ha_host=homeassistant.local:8123
-```
-
-The playbook dynamically includes separate roles for the respective `bootloader` (default: `grub`) and `initmanager` (default: `systemd`).
-
-#### Manual Installation
-
-If you prefer to configure your machine manually without Ansible, you can follow these steps:
-
-**1. Copy the Binary**
-Build the agent and copy the resultant binary to your system's path:
-```bash
-go build ./...
-sudo cp remote-boot-agent /usr/local/bin/
+sudo dpkg -i remote-boot-agent_*_amd64.deb
 ```
 
 **2. Configure GRUB**
