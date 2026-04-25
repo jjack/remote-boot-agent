@@ -20,6 +20,7 @@ func (m *mockListBootloader) GetBootOptions(ctx context.Context, cfg bootloader.
 	return []string{"Ubuntu", "Windows"}, nil
 }
 func (m *mockListBootloader) Install(ctx context.Context, macAddress, haURL string) error { return nil }
+func (m *mockListBootloader) DiscoverConfigPath(ctx context.Context) (string, error)      { return "", nil }
 
 func TestGetBootOptionsCommand(t *testing.T) {
 	cfg := &config.Config{
@@ -74,6 +75,10 @@ func (m *mockListBootloaderErr) Install(ctx context.Context, macAddress, haURL s
 	return nil
 }
 
+func (m *mockListBootloaderErr) DiscoverConfigPath(ctx context.Context) (string, error) {
+	return "", nil
+}
+
 func TestGetBootOptionsCommand_BootloaderError(t *testing.T) {
 	cfg := &config.Config{
 		Bootloader: config.BootloaderConfig{
@@ -106,6 +111,10 @@ func (m *mockListBootloaderEmpty) GetBootOptions(ctx context.Context, cfg bootlo
 
 func (m *mockListBootloaderEmpty) Install(ctx context.Context, macAddress, haURL string) error {
 	return nil
+}
+
+func (m *mockListBootloaderEmpty) DiscoverConfigPath(ctx context.Context) (string, error) {
+	return "", nil
 }
 
 func TestGetBootOptionsCommand_EmptyOptions(t *testing.T) {

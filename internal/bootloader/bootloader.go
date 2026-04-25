@@ -15,6 +15,7 @@ type Bootloader interface {
 	GetBootOptions(ctx context.Context, cfg Config) ([]string, error)
 	Name() string
 	Install(ctx context.Context, macAddress string, haURL string) error
+	DiscoverConfigPath(ctx context.Context) (string, error)
 }
 
 type Factory func() Bootloader

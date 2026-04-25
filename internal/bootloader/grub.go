@@ -49,6 +49,10 @@ func (g *Grub) IsActive(ctx context.Context) bool {
 	return err == nil
 }
 
+func (g *Grub) DiscoverConfigPath(ctx context.Context) (string, error) {
+	return findGrubConfig()
+}
+
 func findGrubConfig() (string, error) {
 	for _, path := range grubPaths {
 		if _, err := os.Stat(path); err == nil {

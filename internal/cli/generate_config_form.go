@@ -10,7 +10,10 @@ func GenerateConfigForm(
 	hostname string,
 	hassURL string,
 	interfaceOptions []system.InterfaceInfo,
+	bootloaderOptions []string,
 	defaultBootloader string,
+	defaultBootloaderPath string,
+	initSystemOptions []string,
 	defaultInitSystem string,
 ) (cfg *config.Config, err error) {
 	macAddress := ""
@@ -18,12 +21,22 @@ func GenerateConfigForm(
 	webhookID := ""
 	finalHostname := hostname
 	blName := defaultBootloader
-	blPath := ""
+	blPath := defaultBootloaderPath
 	initSysName := defaultInitSystem
 
 	var ifaceOpts []huh.Option[string]
 	for _, opt := range interfaceOptions {
 		ifaceOpts = append(ifaceOpts, huh.NewOption(opt.Label, opt.Value))
+	}
+
+	var blOpts []huh.Option[string]
+	for _, opt := range bootloaderOptions {
+		blOpts = append(blOpts, huh.NewOption(opt, opt))
+	}
+
+	var initSysOpts []huh.Option[string]
+	for _, opt := range initSystemOptions {
+		initSysOpts = append(initSysOpts, huh.NewOption(opt, opt))
 	}
 
 	form := huh.NewForm(
@@ -44,22 +57,21 @@ func GenerateConfigForm(
 				Validate(func(v string) error {
 					return config.ValidateMACAddress(v)
 				}),
-		),
+		).Title("Host Configuration"),
 		huh.NewGroup(
-			huh.NewInput().
+			huh.NewSelect[string]().
 				Title("Bootloader").
-				Placeholder("grub").
+				Options(blOpts...).
 				Value(&blName),
 			huh.NewInput().
 				Title("Bootloader Config Path").
-				Description("Leave blank to auto-detect").
-				Placeholder("/boot/grub/grub.cfg").
+				Description("Press enter to accept or enter a custom bootloader path.").
 				Value(&blPath),
-			huh.NewInput().
+			huh.NewSelect[string]().
 				Title("Init System").
-				Placeholder("systemd").
+				Options(initSysOpts...).
 				Value(&initSysName),
-		),
+		).Title("System Configuration"),
 		huh.NewGroup(
 			huh.NewInput().
 				Title("Home Assistant URL").
@@ -76,7 +88,7 @@ func GenerateConfigForm(
 				Validate(func(v string) error {
 					return config.ValidateWebhookID(v)
 				}),
-		),
+		).Title("Home Assistant Configuration"),
 	)
 
 	err = form.Run()

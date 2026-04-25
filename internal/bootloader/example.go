@@ -26,3 +26,7 @@ func (s *Example) Name() string {
 func (s *Example) Install(ctx context.Context, macAddress, haURL string) error {
 	return nil
 }
+
+func (s *Example) DiscoverConfigPath(ctx context.Context) (string, error) {
+	return "/path/to/example.cfg", nil
+}

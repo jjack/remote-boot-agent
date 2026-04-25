@@ -48,13 +48,25 @@ func NewGenerateConfigCmd(deps *CommandDeps) *cobra.Command {
 				return err
 			}
 
+			defaultBootloaderPath := ""
+			if path, err := bl.DiscoverConfigPath(cmd.Context()); err == nil {
+				defaultBootloaderPath = path
+			}
+
 			sys, err := deps.InitRegistry.Detect(cmd.Context())
 			if err != nil {
 				return err
 			}
 
 			cfg, err := GenerateConfigForm(
-				hostname, hassURL, interfaces, bl.Name(), sys.Name(),
+				hostname,
+				hassURL,
+				interfaces,
+				deps.BootloaderRegistry.SupportedBootloaders(),
+				bl.Name(),
+				defaultBootloaderPath,
+				deps.InitRegistry.SupportedInitSystems(),
+				sys.Name(),
 			)
 			if err != nil {
 				return err
