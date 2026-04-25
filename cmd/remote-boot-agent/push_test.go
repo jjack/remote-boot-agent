@@ -58,9 +58,11 @@ func TestPushBootOptionsCommand(t *testing.T) {
 	}
 
 	getBootloader := func() (bootloader.Bootloader, error) { return ResolveBootloader(cfg.Bootloader.Name) }
-	getConfig := func() *config.Config { return cfg }
+	getBootloaderConfig := func() config.BootloaderConfig { return cfg.Bootloader }
+	getHAConfig := func() config.HomeAssistantConfig { return cfg.HomeAssistant }
+	getHostConfig := func() config.HostConfig { return cfg.Host }
 
-	cmd := NewPushBootOptions(getBootloader, getConfig)
+	cmd := NewPushBootOptions(getBootloader, getBootloaderConfig, getHAConfig, getHostConfig)
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -90,9 +92,11 @@ func TestPushBootOptionsCommand_MissingHAConfig(t *testing.T) {
 	}
 
 	getBootloader := func() (bootloader.Bootloader, error) { return ResolveBootloader(cfg.Bootloader.Name) }
-	getConfig := func() *config.Config { return cfg }
+	getBootloaderConfig := func() config.BootloaderConfig { return cfg.Bootloader }
+	getHAConfig := func() config.HomeAssistantConfig { return cfg.HomeAssistant }
+	getHostConfig := func() config.HostConfig { return cfg.Host }
 
-	cmd := NewPushBootOptions(getBootloader, getConfig)
+	cmd := NewPushBootOptions(getBootloader, getBootloaderConfig, getHAConfig, getHostConfig)
 	err := cmd.Execute()
 	if err == nil {
 		t.Fatal("expected error due to missing HA config, got nil")
@@ -110,9 +114,11 @@ func TestPushBootOptionsCommand_UnknownBootloader(t *testing.T) {
 	}
 
 	getBootloader := func() (bootloader.Bootloader, error) { return ResolveBootloader(cfg.Bootloader.Name) }
-	getConfig := func() *config.Config { return cfg }
+	getBootloaderConfig := func() config.BootloaderConfig { return cfg.Bootloader }
+	getHAConfig := func() config.HomeAssistantConfig { return cfg.HomeAssistant }
+	getHostConfig := func() config.HostConfig { return cfg.Host }
 
-	cmd := NewPushBootOptions(getBootloader, getConfig)
+	cmd := NewPushBootOptions(getBootloader, getBootloaderConfig, getHAConfig, getHostConfig)
 	err := cmd.Execute()
 	if err == nil {
 		t.Fatal("expected error")
