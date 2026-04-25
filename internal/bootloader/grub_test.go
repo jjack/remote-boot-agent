@@ -121,7 +121,7 @@ func TestGrub_Install_Success(t *testing.T) {
 	}
 
 	content, _ := os.ReadFile(fakeScriptPath)
-	if !strings.Contains(string(content), "http://hass.local:8123") || !strings.Contains(string(content), "aa:bb:cc:dd:ee:ff") {
+	if !strings.Contains(string(content), "http,hass.local:8123") || !strings.Contains(string(content), "aa:bb:cc:dd:ee:ff") {
 		t.Errorf("template not rendered correctly: %s", string(content))
 	}
 
@@ -190,7 +190,10 @@ func TestGrub_Install_Errors(t *testing.T) {
 
 	// 5. grub2-mkconfig command execution fails
 	execLookPath = func(file string) (string, error) {
-		return "/fake/grub2-mkconfig", nil
+		if file == "grub2-mkconfig" {
+			return "/fake/grub2-mkconfig", nil
+		}
+		return "", errors.New("not found")
 	}
 	err = bl.Install(ctx, "mac", "http://hass.local")
 	if err == nil || !strings.Contains(err.Error(), "grub2-mkconfig failed") {
