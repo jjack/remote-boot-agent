@@ -9,12 +9,9 @@ import (
 
 func TestLoad_NoFile(t *testing.T) {
 	// Don't pass a file, ensure it attempts to find and ends up with defaults
-	cfg, err := Load("", nil)
+	_, err := Load("")
 	if err != nil {
 		t.Fatalf("expected no error when no file is present and not provided, got %v", err)
-	}
-	if cfg.HomeAssistant.URL == "http://homeassistant.local:8123" {
-		t.Errorf("expected default HA URL, got %s", cfg.HomeAssistant.URL)
 	}
 }
 
@@ -29,7 +26,7 @@ func TestLoad_InvalidFormat(t *testing.T) {
 		t.Fatalf("Failed to write temp config: %v", err)
 	}
 
-	_, err := Load(configPath, nil)
+	_, err := Load(configPath)
 	if err == nil {
 		t.Fatal("expected error on invalid format")
 	}

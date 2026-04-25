@@ -6,11 +6,31 @@ import (
 	"github.com/jjack/remote-boot-agent/internal/bootloader"
 	"github.com/jjack/remote-boot-agent/internal/config"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 type CLI struct {
 	Config  *config.Config
 	RootCmd *cobra.Command
+}
+
+func applyFlagOverrides(cmd *cobra.Command, cfg *config.Config) {
+	cmd.Flags().Visit(func(f *pflag.Flag) {
+		switch f.Name {
+		case "mac":
+			cfg.Host.MACAddress = f.Value.String()
+		case "hostname":
+			cfg.Host.Hostname = f.Value.String()
+		case "bootloader":
+			cfg.Bootloader.Name = f.Value.String()
+		case "bootloader-path":
+			cfg.Bootloader.ConfigPath = f.Value.String()
+		case "hass-url":
+			cfg.HomeAssistant.URL = f.Value.String()
+		case "hass-webhook":
+			cfg.HomeAssistant.WebhookID = f.Value.String()
+		}
+	})
 }
 
 func NewCLI() *CLI {
@@ -27,18 +47,24 @@ func NewCLI() *CLI {
 				return nil
 			}
 
-			cfg, err := config.Load(cfgFile, cmd.Flags())
+			cfg, err := config.Load(cfgFile)
 			if err != nil {
 				return err
 			}
 
+			applyFlagOverrides(cmd, cfg)
 			cli.Config = cfg
 			return nil
 		},
 	}
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ./config.yaml)")
-	config.RegisterFlags(rootCmd.PersistentFlags())
+	rootCmd.PersistentFlags().String("mac", "", "MAC Address override")
+	rootCmd.PersistentFlags().String("hostname", "", "Hostname override")
+	rootCmd.PersistentFlags().String("bootloader", "", "Bootloader type override (e.g., grub)")
+	rootCmd.PersistentFlags().String("bootloader-path", "", "Bootloader config path override")
+	rootCmd.PersistentFlags().String("hass-url", "", "Home Assistant URL override")
+	rootCmd.PersistentFlags().String("hass-webhook", "", "Home Assistant Webhook ID override")
 
 	// Dependency providers for lazy evaluation to avoid tight coupling in commands
 	getBootloader := func() (bootloader.Bootloader, error) {

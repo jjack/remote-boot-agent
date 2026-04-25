@@ -8,7 +8,7 @@ import (
 func TestLoad(t *testing.T) {
 	configPath := filepath.Join("..", "..", "config.sample.yaml")
 
-	cfg, err := Load(configPath, nil)
+	cfg, err := Load(configPath)
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestSave(t *testing.T) {
 		t.Fatalf("Save failed: %v", err)
 	}
 
-	savedCfg, err := Load(configPath, nil)
+	savedCfg, err := Load(configPath)
 	if err != nil {
 		t.Fatalf("Load saved config failed: %v", err)
 	}
