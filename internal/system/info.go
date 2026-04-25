@@ -6,6 +6,14 @@ import (
 	"os"
 )
 
+var (
+	osHostname    = os.Hostname
+	netInterfaces = net.Interfaces
+	getAddrs      = func(iface net.Interface) ([]net.Addr, error) {
+		return iface.Addrs()
+	}
+)
+
 type InterfaceInfo struct {
 	Label string
 	Value string
@@ -13,7 +21,7 @@ type InterfaceInfo struct {
 
 // GetIPAddrs returns all addresses for a given interface as strings.
 func GetIPAddrs(iface net.Interface) []string {
-	addrs, err := iface.Addrs()
+	addrs, err := getAddrs(iface)
 	if err != nil {
 		return nil
 	}
@@ -26,7 +34,7 @@ func GetIPAddrs(iface net.Interface) []string {
 
 // GetInterfaceOptions returns a slice of label/value pairs for use in selection UIs.
 func GetInterfaceOptions() ([]InterfaceInfo, error) {
-	interfaces, err := net.Interfaces()
+	interfaces, err := netInterfaces()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list network interfaces: %w", err)
 	}
@@ -50,7 +58,7 @@ func GetInterfaceOptions() ([]InterfaceInfo, error) {
 }
 
 func DetectHostname() (string, error) {
-	hostname, err := os.Hostname()
+	hostname, err := osHostname()
 	if err != nil {
 		return "", fmt.Errorf("failed to detect hostname: %w", err)
 	}

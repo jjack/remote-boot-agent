@@ -87,3 +87,20 @@ func TestCLI_Execute(t *testing.T) {
 		t.Fatalf("execute failed: %v", err)
 	}
 }
+
+func TestCLI_PersistentPreRun_ConfigParseFail(t *testing.T) {
+	f, err := os.CreateTemp("", "bad-*.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Remove(f.Name()) }()
+	_, _ = f.Write([]byte("invalid\n yaml\n  content"))
+	_ = f.Close()
+
+	cli := NewCLI()
+	cli.RootCmd.SetArgs([]string{"list", "--config", f.Name()})
+	err = cli.Execute()
+	if err == nil {
+		t.Fatal("expected error on malformed config file")
+	}
+}

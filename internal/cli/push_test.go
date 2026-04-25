@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -77,6 +78,66 @@ func TestPushBootOptionsCommand(t *testing.T) {
 	}
 	if len(payload.BootOptions) != 1 || payload.BootOptions[0] != "Test OS" {
 		t.Errorf("expected [Test OS], got %v", payload.BootOptions)
+	}
+}
+
+type mockPushBootloaderErr struct{}
+
+func (m *mockPushBootloaderErr) Name() string   { return "err" }
+func (m *mockPushBootloaderErr) IsActive() bool { return true }
+func (m *mockPushBootloaderErr) GetBootOptions(cfg bootloader.Config) ([]string, error) {
+	return nil, errors.New("mock error")
+}
+
+func TestPushBootOptionsCommand_BootloaderError(t *testing.T) {
+	cfg := &config.Config{
+		Bootloader: config.BootloaderConfig{
+			Name: "err",
+		},
+	}
+
+	registry := bootloader.NewRegistry()
+	registry.Register("err", func() bootloader.Bootloader { return &mockPushBootloaderErr{} })
+
+	deps := &CommandDeps{Config: cfg, Registry: registry}
+	cmd := NewPushCmd(deps)
+	err := cmd.Execute()
+
+	if err == nil {
+		t.Fatal("expected error from GetBootOptions, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to get boot options") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+type mockPushBootloader struct{}
+
+func (m *mockPushBootloader) Name() string   { return "mock" }
+func (m *mockPushBootloader) IsActive() bool { return true }
+func (m *mockPushBootloader) GetBootOptions(cfg bootloader.Config) ([]string, error) {
+	return []string{"OS 1"}, nil
+}
+
+func TestPushBootOptionsCommand_HAClientError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer ts.Close()
+
+	cfg := &config.Config{
+		Bootloader:    config.BootloaderConfig{Name: "mock"},
+		HomeAssistant: config.HomeAssistantConfig{URL: ts.URL, WebhookID: "test"},
+	}
+	registry := bootloader.NewRegistry()
+	registry.Register("mock", func() bootloader.Bootloader { return &mockPushBootloader{} })
+
+	deps := &CommandDeps{Config: cfg, Registry: registry}
+	cmd := NewPushCmd(deps)
+	err := cmd.Execute()
+
+	if err == nil {
+		t.Fatal("expected error from HA Push, got nil")
 	}
 }
 

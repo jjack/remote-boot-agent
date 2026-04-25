@@ -1,6 +1,7 @@
 package system
 
 import (
+	"errors"
 	"net"
 	"os"
 	"strings"
@@ -55,5 +56,77 @@ func TestGetIPAddrs_ValidInterface(t *testing.T) {
 	addrs := GetIPAddrs(interfaces[0])
 	if addrs == nil {
 		t.Error("expected GetIPAddrs to return a slice, got nil")
+	}
+}
+
+func TestDetectHostname_Error(t *testing.T) {
+	oldOsHostname := osHostname
+	defer func() { osHostname = oldOsHostname }()
+
+	osHostname = func() (string, error) {
+		return "", errors.New("mock hostname error")
+	}
+
+	_, err := DetectHostname()
+	if err == nil {
+		t.Fatal("expected error detecting hostname, got nil")
+	}
+	if !strings.Contains(err.Error(), "mock hostname error") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestGetInterfaceOptions_Error(t *testing.T) {
+	oldNetInterfaces := netInterfaces
+	defer func() { netInterfaces = oldNetInterfaces }()
+
+	netInterfaces = func() ([]net.Interface, error) {
+		return nil, errors.New("mock interfaces error")
+	}
+
+	_, err := GetInterfaceOptions()
+	if err == nil {
+		t.Fatal("expected error getting interface options, got nil")
+	}
+	if !strings.Contains(err.Error(), "mock interfaces error") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestGetInterfaceOptions_NoSuitable(t *testing.T) {
+	oldNetInterfaces := netInterfaces
+	defer func() { netInterfaces = oldNetInterfaces }()
+
+	netInterfaces = func() ([]net.Interface, error) {
+		// Return an interface that will be skipped (no MAC)
+		return []net.Interface{
+			{
+				Name:         "lo",
+				HardwareAddr: nil,
+				Flags:        net.FlagUp | net.FlagLoopback,
+			},
+		}, nil
+	}
+
+	_, err := GetInterfaceOptions()
+	if err == nil {
+		t.Fatal("expected error for no suitable interfaces, got nil")
+	}
+	if !strings.Contains(err.Error(), "no suitable interfaces found") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestGetIPAddrs_Error(t *testing.T) {
+	oldGetAddrs := getAddrs
+	defer func() { getAddrs = oldGetAddrs }()
+
+	getAddrs = func(iface net.Interface) ([]net.Addr, error) {
+		return nil, errors.New("mock addrs error")
+	}
+
+	addrs := GetIPAddrs(net.Interface{Name: "eth0"})
+	if addrs != nil {
+		t.Errorf("expected GetIPAddrs to return nil on error, got %v", addrs)
 	}
 }
