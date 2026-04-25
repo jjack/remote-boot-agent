@@ -77,16 +77,7 @@ func TestCLI_Execute(t *testing.T) {
 	}
 	defer func() { _ = os.Remove(grubFile.Name()) }()
 
-	// Create a temp config file
-	f, err := os.CreateTemp("", "config-*.yaml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = os.Remove(f.Name()) }()
-	_, _ = f.Write([]byte("host:\n  mac: 00:11:22:33:44:55\n  hostname: test-hostname\nbootloader:\n  name: grub\n  config_path: " + grubFile.Name() + "\nhomeassistant:\n  url: http://localhost\n  webhook_id: test-webhook\n"))
-	_ = f.Close()
-
-	cli.RootCmd.SetArgs([]string{"list", "--config", f.Name()})
+	cli.RootCmd.SetArgs([]string{"list", "--config", "../../config.sample.yaml", "--bootloader-path", grubFile.Name()})
 
 	var b bytes.Buffer
 	cli.RootCmd.SetOut(&b)
