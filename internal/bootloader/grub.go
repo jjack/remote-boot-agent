@@ -191,8 +191,8 @@ func (g *Grub) GetBootOptions(ctx context.Context, cfg Config) ([]string, error)
 
 func (g *Grub) Install(ctx context.Context, macAddress, haURL string) error {
 	u, err := url.Parse(haURL)
-	if err != nil {
-		return fmt.Errorf("invalid home assistant url: %w", err)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return fmt.Errorf("invalid home assistant url: scheme and host are required")
 	}
 
 	tmpl, err := template.New("grub").Parse(grubTemplate)
@@ -210,18 +210,13 @@ func (g *Grub) Install(ctx context.Context, macAddress, haURL string) error {
 		MACAddress: macAddress,
 	}
 
-	f, err := os.OpenFile(hassRemoteBootAgentPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
-	if err != nil {
-		return fmt.Errorf("failed to create grub script (are you running as root?): %w", err)
-	}
-
-	if err := tmpl.Execute(f, data); err != nil {
-		_ = f.Close()
+	var content strings.Builder
+	if err := tmpl.Execute(&content, data); err != nil {
 		return fmt.Errorf("failed to execute grub template: %w", err)
 	}
 
-	if err := f.Close(); err != nil {
-		return fmt.Errorf("failed to close grub script: %w", err)
+	if err := os.WriteFile(hassRemoteBootAgentPath, []byte(content.String()), 0o755); err != nil {
+		return fmt.Errorf("failed to create grub script (are you running as root?): %w", err)
 	}
 
 	if path, err := execLookPath("update-grub"); err == nil {
