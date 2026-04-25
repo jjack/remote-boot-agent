@@ -14,6 +14,15 @@ type CLI struct {
 	RootCmd *cobra.Command
 }
 
+type CommandDeps struct {
+	Config   *config.Config
+	Registry *bootloader.Registry
+}
+
+func (d *CommandDeps) Bootloader() (bootloader.Bootloader, error) {
+	return ResolveBootloader(d.Config.Bootloader.Name, d.Registry)
+}
+
 func applyFlagOverrides(cmd *cobra.Command, cfg *config.Config) {
 	cmd.Flags().Visit(func(f *pflag.Flag) {
 		switch f.Name {
@@ -36,6 +45,11 @@ func applyFlagOverrides(cmd *cobra.Command, cfg *config.Config) {
 func NewCLI() *CLI {
 	cli := &CLI{}
 
+	deps := &CommandDeps{
+		Config:   &config.Config{},
+		Registry: bootloader.NewRegistry(),
+	}
+
 	var cfgFile string
 
 	rootCmd := &cobra.Command{
@@ -53,7 +67,8 @@ func NewCLI() *CLI {
 			}
 
 			applyFlagOverrides(cmd, cfg)
-			cli.Config = cfg
+			*deps.Config = *cfg
+			cli.Config = deps.Config
 			return nil
 		},
 	}
@@ -66,25 +81,10 @@ func NewCLI() *CLI {
 	rootCmd.PersistentFlags().String("hass-url", "", "Home Assistant URL override")
 	rootCmd.PersistentFlags().String("hass-webhook", "", "Home Assistant Webhook ID override")
 
-	registry := bootloader.NewRegistry()
-	registry.Register("grub", bootloader.NewGrub)
+	deps.Registry.Register("grub", bootloader.NewGrub)
 
-	// Dependency providers for lazy evaluation to avoid tight coupling in commands
-	getBootloader := func() (bootloader.Bootloader, error) {
-		return ResolveBootloader(cli.Config.Bootloader.Name, registry)
-	}
-	getBootloaderConfig := func() config.BootloaderConfig {
-		return cli.Config.Bootloader
-	}
-	getHAConfig := func() config.HomeAssistantConfig {
-		return cli.Config.HomeAssistant
-	}
-	getHostConfig := func() config.HostConfig {
-		return cli.Config.Host
-	}
-
-	rootCmd.AddCommand(NewListCmd(getBootloader, getBootloaderConfig))
-	rootCmd.AddCommand(NewPushCmd(getBootloader, getBootloaderConfig, getHAConfig, getHostConfig))
+	rootCmd.AddCommand(NewListCmd(deps))
+	rootCmd.AddCommand(NewPushCmd(deps))
 	rootCmd.AddCommand(NewGenerateConfigCmd())
 
 	// get rid of the completion command because it doesn't make sense here
