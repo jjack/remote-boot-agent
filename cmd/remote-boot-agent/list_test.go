@@ -19,9 +19,9 @@ func TestGetBootOptionsCommand(t *testing.T) {
 	}
 
 	getBootloader := func() (bootloader.Bootloader, error) { return ResolveBootloader(cfg.Bootloader.Name) }
-	getConfig := func() *config.Config { return cfg }
+	getBootloaderConfig := func() config.BootloaderConfig { return cfg.Bootloader }
 
-	cmd := NewGetBootOptions(getBootloader, getConfig)
+	cmd := NewGetBootOptions(getBootloader, getBootloaderConfig)
 
 	// Intercept stdout
 	oldStdout := os.Stdout
@@ -59,9 +59,9 @@ func TestGetBootOptionsCommand_UnknownBootloader(t *testing.T) {
 	}
 
 	getBootloader := func() (bootloader.Bootloader, error) { return ResolveBootloader(cfg.Bootloader.Name) }
-	getConfig := func() *config.Config { return cfg }
+	getBootloaderConfig := func() config.BootloaderConfig { return cfg.Bootloader }
 
-	cmd := NewGetBootOptions(getBootloader, getConfig)
+	cmd := NewGetBootOptions(getBootloader, getBootloaderConfig)
 	err := cmd.Execute()
 
 	if err == nil {

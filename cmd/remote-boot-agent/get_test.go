@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jjack/remote-boot-agent/internal/bootloader"
 	"github.com/jjack/remote-boot-agent/internal/config"
 )
 
@@ -30,8 +31,11 @@ func TestGetSelectedBootOptionCommand(t *testing.T) {
 			WebhookID: "test-webhook",
 		},
 	}
+	getBootloader := func() (bootloader.Bootloader, error) { return ResolveBootloader(cfg.Bootloader.Name) }
+	getHAConfig := func() config.HomeAssistantConfig { return cfg.HomeAssistant }
+	getHostConfig := func() config.HostConfig { return cfg.Host }
 
-	cmd := NewGetRemoteBootOption(func() *config.Config { return cfg })
+	cmd := NewGetRemoteBootOption(getBootloader, getHAConfig, getHostConfig)
 
 	oldStdout := os.Stdout
 	r, w, _ := os.Pipe()
@@ -63,8 +67,11 @@ func TestGetSelectedBootOptionCommand_MissingHAConfig(t *testing.T) {
 			URL: "",
 		},
 	}
+	getBootloader := func() (bootloader.Bootloader, error) { return ResolveBootloader(cfg.Bootloader.Name) }
+	getHAConfig := func() config.HomeAssistantConfig { return cfg.HomeAssistant }
+	getHostConfig := func() config.HostConfig { return cfg.Host }
 
-	cmd := NewGetRemoteBootOption(func() *config.Config { return cfg })
+	cmd := NewGetRemoteBootOption(getBootloader, getHAConfig, getHostConfig)
 	err := cmd.Execute()
 	if err == nil {
 		t.Fatal("expected error due to missing HA config, got nil")
@@ -80,7 +87,11 @@ func TestGetSelectedBootOptionCommand_UnknownBootloader(t *testing.T) {
 			Name: "unknown",
 		},
 	}
-	cmd := NewGetRemoteBootOption(func() *config.Config { return cfg })
+	getBootloader := func() (bootloader.Bootloader, error) { return ResolveBootloader(cfg.Bootloader.Name) }
+	getHAConfig := func() config.HomeAssistantConfig { return cfg.HomeAssistant }
+	getHostConfig := func() config.HostConfig { return cfg.Host }
+
+	cmd := NewGetRemoteBootOption(getBootloader, getHAConfig, getHostConfig)
 	err := cmd.Execute()
 	if err == nil {
 		t.Fatal("expected error")
@@ -102,7 +113,11 @@ func TestGetSelectedBootOptionCommand_APIError(t *testing.T) {
 			WebhookID: "test-webhook",
 		},
 	}
-	cmd := NewGetRemoteBootOption(func() *config.Config { return cfg })
+	getBootloader := func() (bootloader.Bootloader, error) { return ResolveBootloader(cfg.Bootloader.Name) }
+	getHAConfig := func() config.HomeAssistantConfig { return cfg.HomeAssistant }
+	getHostConfig := func() config.HostConfig { return cfg.Host }
+
+	cmd := NewGetRemoteBootOption(getBootloader, getHAConfig, getHostConfig)
 	err := cmd.Execute()
 	if err == nil {
 		t.Fatal("expected error")

@@ -72,13 +72,19 @@ func NewCLI() *CLI {
 	getBootloader := func() (bootloader.Bootloader, error) {
 		return ResolveBootloader(cli.Config.Bootloader.Name)
 	}
-	getConfig := func() *config.Config {
-		return cli.Config
+	getBootloaderConfig := func() config.BootloaderConfig {
+		return cli.Config.Bootloader
+	}
+	getHAConfig := func() config.HomeAssistantConfig {
+		return cli.Config.HomeAssistant
+	}
+	getHostConfig := func() config.HostConfig {
+		return cli.Config.Host
 	}
 
-	rootCmd.AddCommand(NewGetBootOptions(getBootloader, getConfig))
-	rootCmd.AddCommand(NewPushBootOptions(getBootloader, getConfig))
-	rootCmd.AddCommand(NewGetRemoteBootOption(getConfig))
+	rootCmd.AddCommand(NewGetBootOptions(getBootloader, getBootloaderConfig))
+	rootCmd.AddCommand(NewPushBootOptions(getBootloader, getBootloaderConfig, getHAConfig, getHostConfig))
+	rootCmd.AddCommand(NewGetRemoteBootOption(getBootloader, getHAConfig, getHostConfig))
 	rootCmd.AddCommand(NewGenerateConfigCmd())
 
 	// get rid of the completion command because it doesn't make sense here

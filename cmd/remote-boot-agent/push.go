@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func NewPushBootOptions(getBootloader func() (bootloader.Bootloader, error), getConfig func() *config.Config) *cobra.Command {
+func NewPushBootOptions(getBootloader func() (bootloader.Bootloader, error), getBootloaderConfig func() config.BootloaderConfig, getHAConfig func() config.HomeAssistantConfig, getHostConfig func() config.HostConfig) *cobra.Command {
 	return &cobra.Command{
 		Use:   "push",
 		Short: "Push the list of available OSes to Home Assistant",
@@ -22,29 +22,31 @@ func NewPushBootOptions(getBootloader func() (bootloader.Bootloader, error), get
 				return err
 			}
 
-			cfg := getConfig()
-			bootOptions, err := bl.NewGetBootOptions(cfg.Bootloader.ConfigPath)
+			blCfg := getBootloaderConfig()
+			bootOptions, err := bl.NewGetBootOptions(blCfg.ConfigPath)
 			if err != nil {
 				return fmt.Errorf("failed to get boot options: %w", err)
 			}
 
+			hostCfg := getHostConfig()
 			payload := ha.PushPayload{
-				MACAddress:  cfg.Host.MACAddress,
+				MACAddress:  hostCfg.MACAddress,
 				Bootloader:  bl.Name(),
-				Hostname:    cfg.Host.Hostname,
+				Hostname:    hostCfg.Hostname,
 				BootOptions: bootOptions,
 			}
 
-			if cfg.HomeAssistant.URL == "" || cfg.HomeAssistant.WebhookID == "" {
+			haCfg := getHAConfig()
+			if haCfg.URL == "" || haCfg.WebhookID == "" {
 				return fmt.Errorf("homeassistant url and webhook_id must be configured")
 			}
 
 			haClient := ha.NewClient(
-				cfg.HomeAssistant.URL,
-				cfg.HomeAssistant.WebhookID,
+				haCfg.URL,
+				haCfg.WebhookID,
 			)
 
-			slog.Info("Pushing boot options to Home Assistant", "webhook_id", cfg.HomeAssistant.WebhookID)
+			slog.Info("Pushing boot options to Home Assistant", "webhook_id", haCfg.WebhookID)
 
 			if err := haClient.Push(context.Background(), payload); err != nil {
 				return fmt.Errorf("failed to push state to HA webhook: %w", err)
