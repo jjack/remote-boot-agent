@@ -25,15 +25,23 @@ func Discover() (string, error) {
 	defer cancel()
 
 	go func(results <-chan *zeroconf.ServiceEntry) {
-		for entry := range results {
-			// Found it! Grab the first IPv4 address
-			if len(entry.AddrIPv4) > 0 {
-				ip := entry.AddrIPv4[0].String()
-				port := entry.Port
-				url := fmt.Sprintf("http://%s:%d", ip, port)
-				found <- url
-				cancel() // Cancel context to stop spinner and discovery early
+		for {
+			select {
+			case <-ctx.Done():
 				return
+			case entry, ok := <-results:
+				if !ok {
+					return
+				}
+				// Found it! Grab the first IPv4 address
+				if len(entry.AddrIPv4) > 0 {
+					ip := entry.AddrIPv4[0].String()
+					port := entry.Port
+					url := fmt.Sprintf("http://%s:%d", ip, port)
+					found <- url
+					cancel() // Cancel context to stop spinner and discovery early
+					return
+				}
 			}
 		}
 	}(entries)
