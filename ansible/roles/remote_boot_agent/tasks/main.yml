@@ -1,6 +1,0 @@
----
-- name: Apply bootloader configuration
-  ansible.builtin.include_tasks: "bootloader_{{ bootloader }}.yml"
-
-- name: Apply initmanager configuration
-  ansible.builtin.include_tasks: "initmanager_{{ initmanager }}.yml"
