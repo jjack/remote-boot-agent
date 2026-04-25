@@ -75,20 +75,56 @@ func (g *Grub) NewGetBootOptions(configPath string) ([]string, error) {
 	}
 	defer func() { _ = file.Close() }()
 
-	// TODO: add support for submenu entries and other variations (will need to track nesting levels)
 	var options []string
-	scanner := bufio.NewScanner(file)
+	type submenu struct {
+		name      string
+		bodyDepth int
+	}
+	var stack []submenu
+
 	// Match lines like: menuentry 'Ubuntu' ... or menuentry "Windows" ...
-	re := regexp.MustCompile(`^menuentry\s+['"]([^'"]+)['"]`)
+	reMenu := regexp.MustCompile(`^menuentry\s+['"]([^'"]+)['"]`)
+	reSub := regexp.MustCompile(`^submenu\s+['"]([^'"]+)['"]`)
 
 	// Create a custom buffer (initial size 64KB, max size 1MB)
 	buf := make([]byte, initialBufferSize)
+
+	scanner := bufio.NewScanner(file)
 	scanner.Buffer(buf, maxBufferCapacity)
+
+	depth := 0
 
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		if matches := re.FindStringSubmatch(line); len(matches) > 1 {
-			options = append(options, matches[1])
+
+		opens := strings.Count(line, "{")
+		closes := strings.Count(line, "}")
+
+		if m := reSub.FindStringSubmatch(line); len(m) > 1 {
+			stack = append(stack, submenu{
+				name:      m[1],
+				bodyDepth: depth + opens,
+			})
+		} else if m := reMenu.FindStringSubmatch(line); len(m) > 1 {
+			entry := m[1]
+			if len(stack) > 0 {
+				// Flatten hierarchy using GRUB's '>' convention
+				var parts []string
+				for _, s := range stack {
+					parts = append(parts, s.name)
+				}
+				parts = append(parts, entry)
+				entry = strings.Join(parts, ">")
+			}
+			options = append(options, entry)
+		}
+
+		depth += opens
+		depth -= closes
+
+		// Pop submenus that we have exited
+		for len(stack) > 0 && depth < stack[len(stack)-1].bodyDepth {
+			stack = stack[:len(stack)-1]
 		}
 	}
 

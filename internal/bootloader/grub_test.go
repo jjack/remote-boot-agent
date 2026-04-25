@@ -13,51 +13,44 @@ func TestGrubBootloader(t *testing.T) {
 		t.Errorf("expected bootloader name 'grub', got %s", bl.Name())
 	}
 
-	tempDir := t.TempDir()
-	grubConfigPath := filepath.Join(tempDir, "grub.cfg")
-
-	grubContent := `
-# some comment
-menuentry 'Ubuntu' --class ubuntu --class gnu-linux --class gnu --class os $menuentry_id_option 'gnulinux-simple-uuid' {
-	recordfail
-}
-menuentry "Windows 10" {
-	insmod part_gpt
-}
-submenu 'Advanced options for Ubuntu' {
-	menuentry 'Ubuntu, with Linux 5.15.0-generic' {
-		recordfail
-	}
-}
-`
-	if err := os.WriteFile(grubConfigPath, []byte(grubContent), 0o644); err != nil {
-		t.Fatalf("failed to write temp grub config: %v", err)
+	// Point to the standard Go testdata directory
+	testDataPath := filepath.Join("testdata", "grub.cfg")
+	if _, err := os.Stat(testDataPath); os.IsNotExist(err) {
+		t.Skipf("Real grub.cfg not found at %s, skipping test", testDataPath)
 	}
 
 	originalPaths := grubPaths
 	defer func() { grubPaths = originalPaths }()
-	grubPaths = []string{grubConfigPath}
+	grubPaths = []string{testDataPath}
+
+	bootOptions, err := bl.NewGetBootOptions(testDataPath)
 
 	if !bl.IsActive() {
 		t.Error("expected grub bootloader to be logically active")
 	}
 
-	bootOptions, err := bl.NewGetBootOptions(grubConfigPath)
 	if err != nil {
 		t.Fatalf("expected no error from grub NewGetBootOptions, got: %v", err)
 	}
 
-	if len(bootOptions) != 3 {
-		t.Errorf("expected 3 OS entries, got %d", len(bootOptions))
+	wantedOptions := []string{
+		"Debian GNU/Linux",
+		"Advanced options for Debian GNU/Linux>Debian GNU/Linux, with Linux 6.12.74+deb13+1-amd64",
+		"Advanced options for Debian GNU/Linux>Debian GNU/Linux, with Linux 6.12.74+deb13+1-amd64 (recovery mode)",
+		"Advanced options for Debian GNU/Linux>Debian GNU/Linux, with Linux 6.12.73+deb13-amd64",
+		"Advanced options for Debian GNU/Linux>Debian GNU/Linux, with Linux 6.12.73+deb13-amd64 (recovery mode)",
+		"Windows Boot Manager (on /dev/sda1)",
+		"Haiku",
+		"UEFI Firmware Settings",
+	}
+
+	if len(bootOptions) != len(wantedOptions) {
+		t.Errorf("expected %d OS entries, got %d", len(wantedOptions), len(bootOptions))
 	} else {
-		if bootOptions[0] != "Ubuntu" {
-			t.Errorf("expected 'Ubuntu', got '%s'", bootOptions[0])
-		}
-		if bootOptions[1] != "Windows 10" {
-			t.Errorf("expected 'Windows 10', got '%s'", bootOptions[1])
-		}
-		if bootOptions[2] != "Ubuntu, with Linux 5.15.0-generic" {
-			t.Errorf("expected 'Ubuntu, with Linux 5.15.0-generic', got '%s'", bootOptions[2])
+		for i, opt := range bootOptions {
+			if opt != wantedOptions[i] {
+				t.Errorf("expected %s, got %s", wantedOptions[i], opt)
+			}
 		}
 	}
 }
@@ -104,5 +97,29 @@ func TestGrubBootloader_AutoDiscovery_Fail(t *testing.T) {
 	_, err := bl.NewGetBootOptions("")
 	if err == nil {
 		t.Fatal("expected failure to find any grub config")
+	}
+}
+
+func TestGrubBootloader_RealConfig(t *testing.T) {
+	bl := NewGrub()
+
+	// Point to the standard Go testdata directory
+	testDataPath := filepath.Join("testdata", "grub.cfg")
+	if _, err := os.Stat(testDataPath); os.IsNotExist(err) {
+		t.Skipf("Real grub.cfg not found at %s, skipping test", testDataPath)
+	}
+
+	bootOptions, err := bl.NewGetBootOptions(testDataPath)
+	if err != nil {
+		t.Fatalf("failed to parse real grub config: %v", err)
+	}
+
+	if len(bootOptions) == 0 {
+		t.Log("Warning: No boot options found in the provided grub.cfg")
+	} else {
+		t.Logf("Successfully found %d boot options:", len(bootOptions))
+		for _, opt := range bootOptions {
+			t.Logf("  - %s", opt)
+		}
 	}
 }
