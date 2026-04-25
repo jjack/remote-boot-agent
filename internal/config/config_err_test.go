@@ -34,3 +34,11 @@ func TestLoad_InvalidFormat(t *testing.T) {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
+
+func TestSave_Error(t *testing.T) {
+	cfg := &Config{}
+	err := Save(cfg, "/nonexistent_dir_12345/config.yaml")
+	if err == nil {
+		t.Fatal("expected error saving to invalid path")
+	}
+}

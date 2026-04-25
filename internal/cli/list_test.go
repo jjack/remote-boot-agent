@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"io"
 	"os"
 	"strings"
@@ -56,6 +57,72 @@ func TestGetBootOptionsCommand(t *testing.T) {
 	}
 	if !strings.Contains(output, "- Windows") {
 		t.Errorf("output missing boot option 'Windows': %s", output)
+	}
+}
+
+type mockListBootloaderErr struct{}
+
+func (m *mockListBootloaderErr) Name() string   { return "err" }
+func (m *mockListBootloaderErr) IsActive() bool { return true }
+func (m *mockListBootloaderErr) GetBootOptions(cfg bootloader.Config) ([]string, error) {
+	return nil, errors.New("mock error")
+}
+
+func TestGetBootOptionsCommand_BootloaderError(t *testing.T) {
+	cfg := &config.Config{
+		Bootloader: config.BootloaderConfig{
+			Name: "err",
+		},
+	}
+
+	registry := bootloader.NewRegistry()
+	registry.Register("err", func() bootloader.Bootloader { return &mockListBootloaderErr{} })
+
+	deps := &CommandDeps{Config: cfg, Registry: registry}
+	cmd := NewListCmd(deps)
+	err := cmd.Execute()
+
+	if err == nil {
+		t.Fatal("expected error from GetBootOptions, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to get boot options") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+type mockListBootloaderEmpty struct{}
+
+func (m *mockListBootloaderEmpty) Name() string   { return "empty" }
+func (m *mockListBootloaderEmpty) IsActive() bool { return true }
+func (m *mockListBootloaderEmpty) GetBootOptions(cfg bootloader.Config) ([]string, error) {
+	return []string{}, nil
+}
+
+func TestGetBootOptionsCommand_EmptyOptions(t *testing.T) {
+	cfg := &config.Config{
+		Bootloader: config.BootloaderConfig{
+			Name: "empty",
+		},
+	}
+
+	registry := bootloader.NewRegistry()
+	registry.Register("empty", func() bootloader.Bootloader { return &mockListBootloaderEmpty{} })
+
+	deps := &CommandDeps{Config: cfg, Registry: registry}
+	cmd := NewListCmd(deps)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	_ = cmd.Execute()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+
+	out, _ := io.ReadAll(r)
+	if !strings.Contains(string(out), "(None found)") {
+		t.Errorf("output missing '(None found)': %s", string(out))
 	}
 }
 
