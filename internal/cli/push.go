@@ -53,7 +53,7 @@ func NewPushCmd(deps *CommandDeps) *cobra.Command {
 				return fmt.Errorf("failed to push state to HA webhook: %w", err)
 			}
 
-			fmt.Println("Successfully pushed bootloader state.")
+			slog.Info("Successfully pushed bootloader state to Home Assistant")
 			return nil
 		},
 	}

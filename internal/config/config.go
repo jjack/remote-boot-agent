@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -37,11 +36,13 @@ type HomeAssistantConfig struct {
 
 func Load(cfgFile string, flags *pflag.FlagSet) (*Config, error) {
 	v := viper.New()
-	v.SetConfigFile(cfgFile)
-
-	v.AutomaticEnv()
-	v.SetEnvPrefix("RBA")
-	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	if cfgFile != "" {
+		v.SetConfigFile(cfgFile)
+	} else {
+		v.AddConfigPath(".")
+		v.SetConfigName("config")
+		v.SetConfigType("yaml")
+	}
 
 	if flags != nil {
 		_ = v.BindPFlag("host.mac_address", flags.Lookup("mac"))
