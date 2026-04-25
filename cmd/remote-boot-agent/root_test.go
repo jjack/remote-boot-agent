@@ -30,6 +30,8 @@ func TestResolveBootloader(t *testing.T) {
 	}
 
 	registry := bootloader.NewRegistry()
+	registry.Register("example", bootloader.NewExample)
+
 	bl, err := ResolveBootloader(cfg.Bootloader.Name, registry)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -68,13 +70,20 @@ func TestResolveBootloader(t *testing.T) {
 func TestCLI_Execute(t *testing.T) {
 	cli := NewCLI()
 
+	// Create a temp grub config to satisfy the command
+	grubFile, err := os.CreateTemp("", "grub-*.cfg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Remove(grubFile.Name()) }()
+
 	// Create a temp config file
 	f, err := os.CreateTemp("", "config-*.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = os.Remove(f.Name()) }()
-	_, _ = f.Write([]byte("bootloader:\n  name: example\n"))
+	_, _ = f.Write([]byte("bootloader:\n  name: grub\n  config_path: " + grubFile.Name() + "\n"))
 	_ = f.Close()
 
 	cli.RootCmd.SetArgs([]string{"list", "--config", f.Name()})

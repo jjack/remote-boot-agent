@@ -81,9 +81,11 @@ func TestPushBootOptionsCommand(t *testing.T) {
 }
 
 func TestPushBootOptionsCommand_MissingHAConfig(t *testing.T) {
+	tempGrubPath := createTempGrubConfig(t)
 	cfg := &config.Config{
 		Bootloader: config.BootloaderConfig{
-			Name: "example",
+			Name:       "grub",
+			ConfigPath: tempGrubPath,
 		},
 		HomeAssistant: config.HomeAssistantConfig{
 			URL: "",
@@ -91,6 +93,7 @@ func TestPushBootOptionsCommand_MissingHAConfig(t *testing.T) {
 	}
 
 	registry := bootloader.NewRegistry()
+	registry.Register("grub", bootloader.NewGrub)
 
 	deps := &CommandDeps{Config: cfg, Registry: registry}
 	cmd := NewPushCmd(deps)
