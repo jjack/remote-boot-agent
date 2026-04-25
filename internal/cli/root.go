@@ -67,6 +67,11 @@ func NewCLI() *CLI {
 			}
 
 			applyFlagOverrides(cmd, cfg)
+
+			if err := cfg.Validate(); err != nil {
+				return err
+			}
+
 			*deps.Config = *cfg
 			cli.Config = deps.Config
 			return nil

@@ -83,7 +83,7 @@ func TestCLI_Execute(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = os.Remove(f.Name()) }()
-	_, _ = f.Write([]byte("bootloader:\n  name: grub\n  config_path: " + grubFile.Name() + "\n"))
+	_, _ = f.Write([]byte("host:\n  mac: 00:11:22:33:44:55\n  hostname: test-hostname\nbootloader:\n  name: grub\n  config_path: " + grubFile.Name() + "\nhomeassistant:\n  url: http://localhost\n  webhook_id: test-webhook\n"))
 	_ = f.Close()
 
 	cli.RootCmd.SetArgs([]string{"list", "--config", f.Name()})

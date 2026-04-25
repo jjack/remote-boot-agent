@@ -16,7 +16,7 @@ func TestCLI_PersistentPreRun(t *testing.T) {
 	}
 	defer func() { _ = os.Remove(f.Name()) }()
 
-	_, _ = f.Write([]byte("host:\n  mac: test-mac\n  hostname: test-hostname\nbootloader:\n  name: example\n"))
+	_, _ = f.Write([]byte("host:\n  mac: 00:11:22:33:44:55\n  hostname: test-hostname\nbootloader:\n  name: example\n"))
 	_ = f.Close()
 
 	// Create a temporary grub config file to mock bootloader config detection
@@ -25,11 +25,11 @@ func TestCLI_PersistentPreRun(t *testing.T) {
 	cli.RootCmd.SetArgs([]string{
 		"list",
 		"--config", f.Name(),
-		"--mac", "override-mac",
+		"--mac", "aa:bb:cc:dd:ee:ff",
 		"--hostname", "override-host",
 		"--bootloader", "grub",
 		"--bootloader-path", tempGrubPath,
-		"--hass-url", "http://override-ha",
+		"--hass-url", "http://override-ha.local",
 		"--hass-webhook", "override-webhook",
 	})
 
@@ -44,7 +44,7 @@ func TestCLI_PersistentPreRun(t *testing.T) {
 	}
 
 	// Verify all the overrides took effect in the config parsing layer
-	if cli.Config.Host.MACAddress != "override-mac" {
+	if cli.Config.Host.MACAddress != "aa:bb:cc:dd:ee:ff" {
 		t.Errorf("mac not overridden")
 	}
 	if cli.Config.Host.Hostname != "override-host" {
@@ -56,7 +56,7 @@ func TestCLI_PersistentPreRun(t *testing.T) {
 	if cli.Config.Bootloader.ConfigPath != tempGrubPath {
 		t.Errorf("bl cfg not overridden")
 	}
-	if cli.Config.HomeAssistant.URL != "http://override-ha" {
+	if cli.Config.HomeAssistant.URL != "http://override-ha.local" {
 		t.Errorf("url not overridden")
 	}
 	if cli.Config.HomeAssistant.WebhookID != "override-webhook" {
@@ -82,6 +82,10 @@ func TestCLI_PersistentPreRun_ConfigLoadFail(t *testing.T) {
 		"--config", f.Name(),
 		"--bootloader", "grub",
 		"--bootloader-path", tempGrubPath,
+		"--mac", "00:11:22:33:44:55",
+		"--hostname", "test-host",
+		"--hass-url", "http://test-ha.local",
+		"--hass-webhook", "test-webhook",
 	})
 
 	var b bytes.Buffer

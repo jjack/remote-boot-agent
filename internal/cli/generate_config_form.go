@@ -3,7 +3,6 @@ package cli
 import (
 	"charm.land/huh/v2"
 	"github.com/jjack/remote-boot-agent/internal/config"
-	hass "github.com/jjack/remote-boot-agent/internal/homeassistant"
 	"github.com/jjack/remote-boot-agent/internal/system"
 )
 
@@ -48,14 +47,14 @@ func GenerateConfigForm(
 				Placeholder(hassURL).
 				Value(&finalHassURL).
 				Validate(func(v string) error {
-					return hass.ValidateURL(v)
+					return config.ValidateURL(v)
 				}),
 			huh.NewInput().
 				Title("Home Assistant Webhook ID").
 				Placeholder("").
 				Value(&webhookID).
 				Validate(func(v string) error {
-					return hass.ValidateWebhookID(v)
+					return config.ValidateWebhookID(v)
 				}),
 		),
 	)
