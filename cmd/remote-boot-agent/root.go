@@ -82,7 +82,6 @@ func NewCLI() *CLI {
 
 	rootCmd.AddCommand(NewGetBootOptions(getBootloader, getBootloaderConfig))
 	rootCmd.AddCommand(NewPushBootOptions(getBootloader, getBootloaderConfig, getHAConfig, getHostConfig))
-	rootCmd.AddCommand(NewGetRemoteBootOption(getBootloader, getHAConfig, getHostConfig))
 	rootCmd.AddCommand(NewGenerateConfigCmd())
 
 	// get rid of the completion command because it doesn't make sense here
