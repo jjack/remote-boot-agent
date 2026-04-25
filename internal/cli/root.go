@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/jjack/remote-boot-agent/internal/bootloader"
@@ -18,8 +19,8 @@ type CommandDeps struct {
 	Registry *bootloader.Registry
 }
 
-func (d *CommandDeps) Bootloader() (bootloader.Bootloader, error) {
-	return ResolveBootloader(d.Config.Bootloader.Name, d.Registry)
+func (d *CommandDeps) Bootloader(ctx context.Context) (bootloader.Bootloader, error) {
+	return ResolveBootloader(ctx, d.Config.Bootloader.Name, d.Registry)
 }
 
 func NewCLI() *CLI {
@@ -81,7 +82,7 @@ func (cli *CLI) Execute() error {
 	return cli.RootCmd.Execute()
 }
 
-func ResolveBootloader(name string, registry *bootloader.Registry) (bootloader.Bootloader, error) {
+func ResolveBootloader(ctx context.Context, name string, registry *bootloader.Registry) (bootloader.Bootloader, error) {
 	if name != "" {
 		bl := registry.Get(name)
 		if bl == nil {
@@ -90,7 +91,7 @@ func ResolveBootloader(name string, registry *bootloader.Registry) (bootloader.B
 		return bl, nil
 	}
 
-	bl, err := registry.Detect()
+	bl, err := registry.Detect(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("bootloader detection failed: %w", err)
 	}

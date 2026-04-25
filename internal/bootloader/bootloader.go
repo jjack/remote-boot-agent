@@ -1,6 +1,7 @@
 package bootloader
 
 import (
+	"context"
 	"fmt"
 	"sort"
 )
@@ -10,8 +11,8 @@ type Config struct {
 }
 
 type Bootloader interface {
-	IsActive() bool
-	GetBootOptions(cfg Config) ([]string, error)
+	IsActive(ctx context.Context) bool
+	GetBootOptions(ctx context.Context, cfg Config) ([]string, error)
 	Name() string
 }
 
@@ -38,7 +39,7 @@ func (r *Registry) Get(name string) Bootloader {
 	return nil
 }
 
-func (r *Registry) Detect() (Bootloader, error) {
+func (r *Registry) Detect(ctx context.Context) (Bootloader, error) {
 	var names []string
 	for name := range r.bootloaders {
 		names = append(names, name)
@@ -48,7 +49,7 @@ func (r *Registry) Detect() (Bootloader, error) {
 	for _, name := range names {
 		factory := r.bootloaders[name]
 		bl := factory()
-		if bl.IsActive() {
+		if bl.IsActive(ctx) {
 			return bl, nil
 		}
 	}

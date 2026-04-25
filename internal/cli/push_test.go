@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -83,9 +84,9 @@ func TestPushBootOptionsCommand(t *testing.T) {
 
 type mockPushBootloaderErr struct{}
 
-func (m *mockPushBootloaderErr) Name() string   { return "err" }
-func (m *mockPushBootloaderErr) IsActive() bool { return true }
-func (m *mockPushBootloaderErr) GetBootOptions(cfg bootloader.Config) ([]string, error) {
+func (m *mockPushBootloaderErr) Name() string                      { return "err" }
+func (m *mockPushBootloaderErr) IsActive(ctx context.Context) bool { return true }
+func (m *mockPushBootloaderErr) GetBootOptions(ctx context.Context, cfg bootloader.Config) ([]string, error) {
 	return nil, errors.New("mock error")
 }
 
@@ -113,9 +114,9 @@ func TestPushBootOptionsCommand_BootloaderError(t *testing.T) {
 
 type mockPushBootloader struct{}
 
-func (m *mockPushBootloader) Name() string   { return "mock" }
-func (m *mockPushBootloader) IsActive() bool { return true }
-func (m *mockPushBootloader) GetBootOptions(cfg bootloader.Config) ([]string, error) {
+func (m *mockPushBootloader) Name() string                      { return "mock" }
+func (m *mockPushBootloader) IsActive(ctx context.Context) bool { return true }
+func (m *mockPushBootloader) GetBootOptions(ctx context.Context, cfg bootloader.Config) ([]string, error) {
 	return []string{"OS 1"}, nil
 }
 

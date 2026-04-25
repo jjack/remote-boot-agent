@@ -12,14 +12,14 @@ func NewListCmd(deps *CommandDeps) *cobra.Command {
 		Use:   "list",
 		Short: "Output the list of available boot options from the bootloader",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			bl, err := deps.Bootloader()
+			bl, err := deps.Bootloader(cmd.Context())
 			if err != nil {
 				return err
 			}
 
 			fmt.Printf("Bootloader: %s\n", bl.Name())
 
-			bootOptions, err := bl.GetBootOptions(bootloader.Config{
+			bootOptions, err := bl.GetBootOptions(cmd.Context(), bootloader.Config{
 				ConfigPath: deps.Config.Bootloader.ConfigPath,
 			})
 			if err != nil {
