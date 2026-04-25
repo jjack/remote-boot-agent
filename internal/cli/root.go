@@ -6,7 +6,6 @@ import (
 	"github.com/jjack/remote-boot-agent/internal/bootloader"
 	"github.com/jjack/remote-boot-agent/internal/config"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 )
 
 type CLI struct {
@@ -21,25 +20,6 @@ type CommandDeps struct {
 
 func (d *CommandDeps) Bootloader() (bootloader.Bootloader, error) {
 	return ResolveBootloader(d.Config.Bootloader.Name, d.Registry)
-}
-
-func applyFlagOverrides(cmd *cobra.Command, cfg *config.Config) {
-	cmd.Flags().Visit(func(f *pflag.Flag) {
-		switch f.Name {
-		case "mac":
-			cfg.Host.MACAddress = f.Value.String()
-		case "hostname":
-			cfg.Host.Hostname = f.Value.String()
-		case "bootloader":
-			cfg.Bootloader.Name = f.Value.String()
-		case "bootloader-path":
-			cfg.Bootloader.ConfigPath = f.Value.String()
-		case "hass-url":
-			cfg.HomeAssistant.URL = f.Value.String()
-		case "hass-webhook":
-			cfg.HomeAssistant.WebhookID = f.Value.String()
-		}
-	})
 }
 
 func NewCLI() *CLI {
@@ -61,12 +41,10 @@ func NewCLI() *CLI {
 				return nil
 			}
 
-			cfg, err := config.Load(cfgFile)
+			cfg, err := config.Load(cfgFile, cmd.Flags())
 			if err != nil {
 				return err
 			}
-
-			applyFlagOverrides(cmd, cfg)
 
 			if err := cfg.Validate(); err != nil {
 				return err
