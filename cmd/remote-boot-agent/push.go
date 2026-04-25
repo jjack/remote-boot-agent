@@ -4,30 +4,28 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/jjack/remote-boot-agent/internal/bootloader"
-	"github.com/jjack/remote-boot-agent/internal/config"
 	ha "github.com/jjack/remote-boot-agent/internal/homeassistant"
 
 	"github.com/spf13/cobra"
 )
 
-func NewPushCmd(getBootloader func() (bootloader.Bootloader, error), getBootloaderConfig func() config.BootloaderConfig, getHAConfig func() config.HomeAssistantConfig, getHostConfig func() config.HostConfig) *cobra.Command {
+func NewPushCmd(deps *CommandDeps) *cobra.Command {
 	return &cobra.Command{
 		Use:   "push",
 		Short: "Push the list of available OSes to Home Assistant",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			bl, err := getBootloader()
+			bl, err := deps.Bootloader()
 			if err != nil {
 				return err
 			}
 
-			blCfg := getBootloaderConfig()
+			blCfg := deps.Config.Bootloader
 			bootOptions, err := bl.GetBootOptions(blCfg.ConfigPath)
 			if err != nil {
 				return fmt.Errorf("failed to get boot options: %w", err)
 			}
 
-			hostCfg := getHostConfig()
+			hostCfg := deps.Config.Host
 			payload := ha.PushPayload{
 				MACAddress:  hostCfg.MACAddress,
 				Bootloader:  bl.Name(),
@@ -35,7 +33,7 @@ func NewPushCmd(getBootloader func() (bootloader.Bootloader, error), getBootload
 				BootOptions: bootOptions,
 			}
 
-			haCfg := getHAConfig()
+			haCfg := deps.Config.HomeAssistant
 			if haCfg.URL == "" || haCfg.WebhookID == "" {
 				return fmt.Errorf("homeassistant url and webhook_id must be configured")
 			}

@@ -60,12 +60,8 @@ func TestPushBootOptionsCommand(t *testing.T) {
 	registry := bootloader.NewRegistry()
 	registry.Register("grub", bootloader.NewGrub)
 
-	getBootloader := func() (bootloader.Bootloader, error) { return ResolveBootloader(cfg.Bootloader.Name, registry) }
-	getBootloaderConfig := func() config.BootloaderConfig { return cfg.Bootloader }
-	getHAConfig := func() config.HomeAssistantConfig { return cfg.HomeAssistant }
-	getHostConfig := func() config.HostConfig { return cfg.Host }
-
-	cmd := NewPushCmd(getBootloader, getBootloaderConfig, getHAConfig, getHostConfig)
+	deps := &CommandDeps{Config: cfg, Registry: registry}
+	cmd := NewPushCmd(deps)
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -96,12 +92,8 @@ func TestPushBootOptionsCommand_MissingHAConfig(t *testing.T) {
 
 	registry := bootloader.NewRegistry()
 
-	getBootloader := func() (bootloader.Bootloader, error) { return ResolveBootloader(cfg.Bootloader.Name, registry) }
-	getBootloaderConfig := func() config.BootloaderConfig { return cfg.Bootloader }
-	getHAConfig := func() config.HomeAssistantConfig { return cfg.HomeAssistant }
-	getHostConfig := func() config.HostConfig { return cfg.Host }
-
-	cmd := NewPushCmd(getBootloader, getBootloaderConfig, getHAConfig, getHostConfig)
+	deps := &CommandDeps{Config: cfg, Registry: registry}
+	cmd := NewPushCmd(deps)
 	err := cmd.Execute()
 	if err == nil {
 		t.Fatal("expected error due to missing HA config, got nil")
@@ -120,12 +112,8 @@ func TestPushBootOptionsCommand_UnknownBootloader(t *testing.T) {
 
 	registry := bootloader.NewRegistry()
 
-	getBootloader := func() (bootloader.Bootloader, error) { return ResolveBootloader(cfg.Bootloader.Name, registry) }
-	getBootloaderConfig := func() config.BootloaderConfig { return cfg.Bootloader }
-	getHAConfig := func() config.HomeAssistantConfig { return cfg.HomeAssistant }
-	getHostConfig := func() config.HostConfig { return cfg.Host }
-
-	cmd := NewPushCmd(getBootloader, getBootloaderConfig, getHAConfig, getHostConfig)
+	deps := &CommandDeps{Config: cfg, Registry: registry}
+	cmd := NewPushCmd(deps)
 	err := cmd.Execute()
 	if err == nil {
 		t.Fatal("expected error")
