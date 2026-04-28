@@ -19,10 +19,12 @@ type Client struct {
 }
 
 type PushPayload struct {
-	MACAddress  string   `json:"mac"`
-	Hostname    string   `json:"hostname"`
-	Bootloader  string   `json:"bootloader"`
-	BootOptions []string `json:"boot_options"`
+	MACAddress       string   `json:"mac"`
+	BroadcastAddress string   `json:"broadcast_address"`
+	BroadcastPort    int      `json:"broadcast_port"`
+	Hostname         string   `json:"hostname"`
+	Bootloader       string   `json:"bootloader"`
+	BootOptions      []string `json:"boot_options"`
 }
 
 func NewClient(baseURL, webhookID string, httpClient *http.Client) *Client {

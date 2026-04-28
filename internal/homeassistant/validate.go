@@ -11,8 +11,8 @@ func ValidateWebhookID(webhookID string) error {
 		return fmt.Errorf("webhook id cannot be empty")
 	}
 
-	if !regexp.MustCompile(`^[a-zA-Z0-9_]+$`).MatchString(webhookID) {
-		return fmt.Errorf("webhook id can only contain letters, numbers, and underscores")
+	if !regexp.MustCompile(`^[a-zA-Z0-9_-]+$`).MatchString(webhookID) {
+		return fmt.Errorf("webhook id can only contain letters, numbers, hyphens, and underscores")
 	}
 	if len(webhookID) > 255 {
 		return fmt.Errorf("webhook id cannot be longer than 255 characters")

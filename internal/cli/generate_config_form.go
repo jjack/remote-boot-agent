@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"strconv"
+
 	"charm.land/huh/v2"
 	"github.com/jjack/remote-boot-agent/internal/config"
 	"github.com/jjack/remote-boot-agent/internal/system"
@@ -23,6 +25,8 @@ func GenerateConfigForm(
 	blName := defaultBootloader
 	blPath := defaultBootloaderPath
 	initSysName := defaultInitSystem
+	broadcastAddress := ""
+	wolPortStr := ""
 
 	var ifaceOpts []huh.Option[string]
 	for _, opt := range interfaceOptions {
@@ -56,6 +60,14 @@ func GenerateConfigForm(
 				Value(&macAddress).
 				Validate(func(v string) error {
 					return config.ValidateMACAddress(v)
+				}),
+
+			huh.NewInput().
+				Title("Wake-on-LAN Port").
+				Description("The UDP port used to send the WOL magic packet.").
+				Value(&wolPortStr).
+				Validate(func(v string) error {
+					return config.ValidateBroadcastPort(v)
 				}),
 		).Title("Host Configuration"),
 		huh.NewGroup(
@@ -96,10 +108,42 @@ func GenerateConfigForm(
 		return nil, err
 	}
 
+	broadcastAddrs, _ := system.GetBroadcastAddresses(macAddress)
+	if len(broadcastAddrs) > 1 {
+		var bcastOpts []huh.Option[string]
+		for _, b := range broadcastAddrs {
+			bcastOpts = append(bcastOpts, huh.NewOption(b, b))
+		}
+		err = huh.NewSelect[string]().
+			Title("Select WOL Subnet").
+			Description("Multiple subnets detected. Choose the one to use for WOL.").
+			Options(bcastOpts...).
+			Value(&broadcastAddress).
+			Run()
+		if err != nil {
+			return nil, err
+		}
+	} else if len(broadcastAddrs) == 1 {
+		broadcastAddress = broadcastAddrs[0]
+	}
+
+	err = huh.NewInput().
+		Title("WOL Broadcast Address").
+		Description("Press enter to accept the discovered address or enter a custom broadcast address.").
+		Value(&broadcastAddress).
+		Run()
+	if err != nil {
+		return nil, err
+	}
+
+	wolPort, _ := strconv.Atoi(wolPortStr)
+
 	cfg = &config.Config{
 		Host: config.HostConfig{
-			MACAddress: macAddress,
-			Hostname:   finalHostname,
+			MACAddress:       macAddress,
+			Hostname:         finalHostname,
+			BroadcastAddress: broadcastAddress,
+			BroadcastPort:    wolPort,
 		},
 		HomeAssistant: config.HomeAssistantConfig{
 			URL:       finalHassURL,

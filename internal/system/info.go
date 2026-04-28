@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 )
 
 var (
@@ -46,7 +47,8 @@ func GetInterfaceOptions() ([]InterfaceInfo, error) {
 		}
 
 		macStr := inf.HardwareAddr.String()
-		label := fmt.Sprintf("%s (%s) [%v]", inf.Name, macStr, GetIPAddrs(inf))
+		ips := strings.Join(GetIPAddrs(inf), ", ")
+		label := fmt.Sprintf("%s (%s) [%s]", inf.Name, macStr, ips)
 		options = append(options, InterfaceInfo{Label: label, Value: macStr})
 	}
 
@@ -63,4 +65,50 @@ func DetectHostname() (string, error) {
 		return "", fmt.Errorf("failed to detect hostname: %w", err)
 	}
 	return hostname, nil
+}
+
+func GetBroadcastAddresses(mac string) ([]string, error) {
+	interfaces, err := netInterfaces()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list network interfaces: %w", err)
+	}
+
+	var broadcasts []string
+	seen := make(map[string]bool)
+	for _, inf := range interfaces {
+		if strings.EqualFold(inf.HardwareAddr.String(), mac) {
+			addrs, err := getAddrs(inf)
+			if err != nil {
+				continue
+			}
+			for _, addr := range addrs {
+				if ipnet, ok := addr.(*net.IPNet); ok {
+					ip := ipnet.IP.To4()
+					if ip != nil {
+						mask := ipnet.Mask
+						if len(mask) == net.IPv6len {
+							mask = mask[12:]
+						}
+						if len(mask) == net.IPv4len {
+							broadcast := net.IPv4(
+								ip[0]|^mask[0],
+								ip[1]|^mask[1],
+								ip[2]|^mask[2],
+								ip[3]|^mask[3],
+							).String()
+							if !seen[broadcast] {
+								broadcasts = append(broadcasts, broadcast)
+								seen[broadcast] = true
+							}
+						}
+					}
+				}
+			}
+			break
+		}
+	}
+	if len(broadcasts) == 0 {
+		return []string{"255.255.255.255"}, nil
+	}
+	return broadcasts, nil
 }

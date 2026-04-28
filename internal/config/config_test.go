@@ -1,73 +1,81 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
 
-func TestLoad(t *testing.T) {
-	configPath := filepath.Join("..", "..", "config.sample.yaml")
-
-	cfg, err := Load(configPath, nil)
-	if err != nil {
-		t.Fatalf("Load failed: %v", err)
-	}
-
-	if cfg.Host.MACAddress != "00:11:22:33:44:55" {
-		t.Errorf("expected MAC 00:11:22:33:44:55, got %s", cfg.Host.MACAddress)
-	}
-	if cfg.Host.Hostname != "my-remote-pc" {
-		t.Errorf("expected Hostname my-remote-pc, got %s", cfg.Host.Hostname)
-	}
-	if cfg.Bootloader.Name != "grub" {
-		t.Errorf("expected Bootloader grub, got %s", cfg.Bootloader.Name)
-	}
-	if cfg.Bootloader.ConfigPath != "/boot/grub/grub.cfg" {
-		t.Errorf("expected Bootloader config_path /boot/grub/grub.cfg, got %s", cfg.Bootloader.ConfigPath)
-	}
-	if cfg.HomeAssistant.URL != "https://homeassistant.local:8123" {
-		t.Errorf("expected HA URL https://homeassistant.local:8123, got %s", cfg.HomeAssistant.URL)
-	}
-	if cfg.HomeAssistant.WebhookID != "your-generated-webhook-id" {
-		t.Errorf("expected HA Webhook your-generated-webhook-id, got %s", cfg.HomeAssistant.WebhookID)
-	}
-}
-
-func TestSave(t *testing.T) {
+func TestConfig_SaveAndLoad(t *testing.T) {
 	tempDir := t.TempDir()
-	configPath := filepath.Join(tempDir, "test_config.yaml")
+	cfgPath := filepath.Join(tempDir, "config.yaml")
 
 	cfg := &Config{
 		Host: HostConfig{
-			MACAddress: "00:11:22:33:44:55",
-			Hostname:   "test-host",
+			MACAddress:       "00:11:22:33:44:55",
+			Hostname:         "test-host",
+			BroadcastAddress: "192.168.1.255",
+			BroadcastPort:    9,
+		},
+		Bootloader: BootloaderConfig{
+			Name:       "grub",
+			ConfigPath: "/boot/grub/grub.cfg",
+		},
+		InitSystem: InitSystemConfig{
+			Name: "systemd",
 		},
 		HomeAssistant: HomeAssistantConfig{
-			URL:       "http://localhost:8123",
-			WebhookID: "test_webhook",
+			URL:       "http://ha.local",
+			WebhookID: "test-webhook",
 		},
 	}
 
-	err := Save(cfg, configPath)
+	// Test writing to the filesystem
+	err := Save(cfg, cfgPath)
 	if err != nil {
-		t.Fatalf("Save failed: %v", err)
+		t.Fatalf("failed to save config: %v", err)
 	}
 
-	savedCfg, err := Load(configPath, nil)
-	if err != nil {
-		t.Fatalf("Load saved config failed: %v", err)
+	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
+		t.Fatalf("expected config file to exist at %s", cfgPath)
 	}
 
-	if savedCfg.Host.MACAddress != cfg.Host.MACAddress {
-		t.Errorf("expected MAC %s, got %s", cfg.Host.MACAddress, savedCfg.Host.MACAddress)
+	// Test loading from the filesystem
+	loadedCfg, err := Load(cfgPath, nil)
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
 	}
-	if savedCfg.Host.Hostname != cfg.Host.Hostname {
-		t.Errorf("expected Hostname %s, got %s", cfg.Host.Hostname, savedCfg.Host.Hostname)
+
+	if loadedCfg.Host.MACAddress != cfg.Host.MACAddress {
+		t.Errorf("expected MAC %s, got %s", cfg.Host.MACAddress, loadedCfg.Host.MACAddress)
 	}
-	if savedCfg.HomeAssistant.URL != cfg.HomeAssistant.URL {
-		t.Errorf("expected HA URL %s, got %s", cfg.HomeAssistant.URL, savedCfg.HomeAssistant.URL)
+	if loadedCfg.Bootloader.ConfigPath != cfg.Bootloader.ConfigPath {
+		t.Errorf("expected Bootloader path %s, got %s", cfg.Bootloader.ConfigPath, loadedCfg.Bootloader.ConfigPath)
 	}
-	if savedCfg.HomeAssistant.WebhookID != cfg.HomeAssistant.WebhookID {
-		t.Errorf("expected HA Webhook %s, got %s", cfg.HomeAssistant.WebhookID, savedCfg.HomeAssistant.WebhookID)
+	if loadedCfg.HomeAssistant.WebhookID != cfg.HomeAssistant.WebhookID {
+		t.Errorf("expected Webhook ID %s, got %s", cfg.HomeAssistant.WebhookID, loadedCfg.HomeAssistant.WebhookID)
+	}
+}
+
+func TestConfig_SaveError(t *testing.T) {
+	cfg := &Config{}
+	// Passing a directory path should cause WriteConfigAs to fail
+	err := Save(cfg, t.TempDir())
+	if err == nil {
+		t.Fatal("expected error when saving to a directory path, got nil")
+	}
+}
+
+func TestConfig_LoadDefaults(t *testing.T) {
+	originalWD, _ := os.Getwd()
+	_ = os.Chdir(t.TempDir()) // Ensure we're in an empty directory without a config file
+	defer func() { _ = os.Chdir(originalWD) }()
+
+	cfg, err := Load("", nil)
+	if err != nil {
+		t.Fatalf("expected no error when config file is absent, got: %v", err)
+	}
+	if cfg == nil {
+		t.Fatalf("expected a valid, empty config object, got nil")
 	}
 }

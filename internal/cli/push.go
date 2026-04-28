@@ -30,10 +30,12 @@ func NewPushCmd(deps *CommandDeps) *cobra.Command {
 
 			hostCfg := deps.Config.Host
 			payload := ha.PushPayload{
-				MACAddress:  hostCfg.MACAddress,
-				Bootloader:  bl.Name(),
-				Hostname:    hostCfg.Hostname,
-				BootOptions: bootOptions,
+				MACAddress:       hostCfg.MACAddress,
+				BroadcastAddress: hostCfg.BroadcastAddress,
+				BroadcastPort:    hostCfg.BroadcastPort,
+				Bootloader:       bl.Name(),
+				Hostname:         hostCfg.Hostname,
+				BootOptions:      bootOptions,
 			}
 
 			haCfg := deps.Config.HomeAssistant
@@ -48,6 +50,7 @@ func NewPushCmd(deps *CommandDeps) *cobra.Command {
 			)
 
 			slog.Info("Pushing boot options to Home Assistant", "webhook_id", haCfg.WebhookID)
+			slog.Debug("Payload", "payload", payload)
 
 			if err := haClient.Push(cmd.Context(), payload); err != nil {
 				return fmt.Errorf("failed to push state to HA webhook: %w", err)

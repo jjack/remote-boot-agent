@@ -91,8 +91,10 @@ func TestValidateWebhookID(t *testing.T) {
 func TestConfigValidate(t *testing.T) {
 	cfg := &Config{
 		Host: HostConfig{
-			MACAddress: "00:11:22:33:44:55",
-			Hostname:   "test-host",
+			MACAddress:       "00:11:22:33:44:55",
+			Hostname:         "test-host",
+			BroadcastAddress: "192.168.1.255",
+			BroadcastPort:    9,
 		},
 		HomeAssistant: HomeAssistantConfig{
 			URL:       "http://localhost:8123",

@@ -12,8 +12,9 @@ func TestValidateWebhookID(t *testing.T) {
 		wantErr   bool
 	}{
 		{"valid", "my_webhook_123", false},
+		{"valid with hyphen", "my-webhook-123", false},
 		{"empty", "", true},
-		{"invalid characters", "my-webhook-123", true},
+		{"invalid characters", "my!webhook", true},
 		{"too long", strings.Repeat("a", 256), true},
 	}
 
