@@ -13,8 +13,10 @@ func TestGenerateConfigForm_ConstructsConfig(t *testing.T) {
 	// We can't run the interactive form in a unit test, but we can check that the config struct is constructed correctly
 	cfg := &config.Config{
 		Host: config.HostConfig{
-			MACAddress: "00:11:22:33:44:55",
-			Hostname:   hostname,
+			MACAddress:       "00:11:22:33:44:55",
+			Hostname:         hostname,
+			BroadcastAddress: "192.168.1.255",
+			BroadcastPort:    9,
 		},
 		HomeAssistant: config.HomeAssistantConfig{
 			URL:       hassURL,
@@ -34,6 +36,12 @@ func TestGenerateConfigForm_ConstructsConfig(t *testing.T) {
 	}
 	if cfg.Host.Hostname != hostname {
 		t.Errorf("expected Hostname to be %s, got %s", hostname, cfg.Host.Hostname)
+	}
+	if cfg.Host.BroadcastAddress != "192.168.1.255" {
+		t.Errorf("expected BroadcastAddress to be 192.168.1.255, got %s", cfg.Host.BroadcastAddress)
+	}
+	if cfg.Host.BroadcastPort != 9 {
+		t.Errorf("expected BroadcastPort to be 9, got %d", cfg.Host.BroadcastPort)
 	}
 	if cfg.HomeAssistant.URL != hassURL {
 		t.Errorf("expected HomeAssistant.URL to be %s, got %s", hassURL, cfg.HomeAssistant.URL)

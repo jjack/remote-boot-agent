@@ -16,8 +16,11 @@ func TestCLI_PersistentPreRun(t *testing.T) {
 		"--config", "../../config.sample.yaml",
 		"--mac", "aa:bb:cc:dd:ee:ff",
 		"--hostname", "override-host",
+		"--broadcast-address", "192.168.1.255",
+		"--wol-port", "7",
 		"--bootloader", "grub",
 		"--bootloader-path", tempGrubPath,
+		"--init-system", "systemd",
 		"--hass-url", "http://override-ha.local",
 		"--hass-webhook", "override-webhook",
 	})
@@ -39,11 +42,20 @@ func TestCLI_PersistentPreRun(t *testing.T) {
 	if cli.Config.Host.Hostname != "override-host" {
 		t.Errorf("host not overridden")
 	}
+	if cli.Config.Host.BroadcastAddress != "192.168.1.255" {
+		t.Errorf("broadcast address not overridden")
+	}
+	if cli.Config.Host.BroadcastPort != 7 {
+		t.Errorf("wol port not overridden")
+	}
 	if cli.Config.Bootloader.Name != "grub" {
 		t.Errorf("bl not overridden")
 	}
 	if cli.Config.Bootloader.ConfigPath != tempGrubPath {
 		t.Errorf("bl cfg not overridden")
+	}
+	if cli.Config.InitSystem.Name != "systemd" {
+		t.Errorf("init system not overridden")
 	}
 	if cli.Config.HomeAssistant.URL != "http://override-ha.local" {
 		t.Errorf("url not overridden")

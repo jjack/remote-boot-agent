@@ -2,9 +2,11 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"net"
 	"net/url"
 	"regexp"
+	"strconv"
 )
 
 func ValidateMACAddress(v string) error {
@@ -39,6 +41,18 @@ func ValidateWebhookID(v string) error {
 	return nil
 }
 
+func ValidateBroadcastPort(v string) error {
+	if v == "" {
+		return fmt.Errorf("WOL port cannot be empty")
+	}
+	port, err := strconv.Atoi(v)
+	if err != nil || port < 1 || port > 65535 {
+		slog.Debug("Invalid WOL port", "port", port)
+		return fmt.Errorf("invalid WOL port: must be a number between 1 and 65535")
+	}
+	return nil
+}
+
 func (c *Config) Validate() error {
 	if err := ValidateMACAddress(c.Host.MACAddress); err != nil {
 		return err
@@ -50,6 +64,9 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := ValidateWebhookID(c.HomeAssistant.WebhookID); err != nil {
+		return err
+	}
+	if err := ValidateBroadcastPort(strconv.Itoa(c.Host.BroadcastPort)); err != nil {
 		return err
 	}
 	return nil

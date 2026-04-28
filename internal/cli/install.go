@@ -25,7 +25,7 @@ func NewInstallCmd(deps *CommandDeps) *cobra.Command {
 			macAddress := deps.Config.Host.MACAddress
 			haURL := deps.Config.HomeAssistant.URL
 
-			fmt.Printf("Installing into bootloader: %s\n", bl.Name())
+			cmd.Printf("Installing into bootloader: %s\n", bl.Name())
 			if err := bl.Install(cmd.Context(), macAddress, haURL); err != nil {
 				return fmt.Errorf("failed to install bootloader: %w", err)
 			}
@@ -40,12 +40,12 @@ func NewInstallCmd(deps *CommandDeps) *cobra.Command {
 				return fmt.Errorf("failed to resolve config path: %w", err)
 			}
 
-			fmt.Printf("Installing into init system: %s\n", sys.Name())
+			cmd.Printf("Installing into init system: %s\n", sys.Name())
 			if err := sys.Install(cmd.Context(), absConfig); err != nil {
 				return fmt.Errorf("failed to install init system: %w", err)
 			}
 
-			fmt.Println("Installation completed successfully.")
+			cmd.Println("Installation completed successfully.")
 			return nil
 		},
 	}

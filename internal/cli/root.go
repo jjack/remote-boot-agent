@@ -69,9 +69,11 @@ func NewCLI() *CLI {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "./config.yaml", "config file")
 	rootCmd.PersistentFlags().String("mac", "", "MAC Address override")
 	rootCmd.PersistentFlags().String("hostname", "", "Hostname override")
+	rootCmd.PersistentFlags().String("broadcast-address", "", "Broadcast address override for WOL")
+	rootCmd.PersistentFlags().Int("wol-port", 9, "Broadcast port override for WOL")
 	rootCmd.PersistentFlags().String("bootloader", "", "Bootloader type override (e.g., grub)")
 	rootCmd.PersistentFlags().String("bootloader-path", "", "Bootloader config path override")
-	rootCmd.PersistentFlags().String("initsystem", "", "Initsystem override (e.g., systemd)")
+	rootCmd.PersistentFlags().String("init-system", "", "Initsystem override (e.g., systemd)")
 	rootCmd.PersistentFlags().String("hass-url", "", "Home Assistant URL override")
 	rootCmd.PersistentFlags().String("hass-webhook", "", "Home Assistant Webhook ID override")
 

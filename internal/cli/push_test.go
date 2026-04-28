@@ -46,8 +46,10 @@ func TestPushBootOptionsCommand(t *testing.T) {
 	tempGrubPath := createTempGrubConfig(t)
 	cfg := &config.Config{
 		Host: config.HostConfig{
-			MACAddress: "aa:bb:cc:dd:ee:ff",
-			Hostname:   "test-host",
+			MACAddress:       "aa:bb:cc:dd:ee:ff",
+			BroadcastAddress: "192.168.1.255",
+			BroadcastPort:    9,
+			Hostname:         "test-host",
 		},
 		Bootloader: config.BootloaderConfig{
 			Name:       "grub",
@@ -70,6 +72,12 @@ func TestPushBootOptionsCommand(t *testing.T) {
 
 	if payload.MACAddress != "aa:bb:cc:dd:ee:ff" {
 		t.Errorf("expected MAC address aa:bb:cc:dd:ee:ff, got %s", payload.MACAddress)
+	}
+	if payload.BroadcastAddress != "192.168.1.255" {
+		t.Errorf("expected broadcast address 192.168.1.255, got %s", payload.BroadcastAddress)
+	}
+	if payload.BroadcastPort != 9 {
+		t.Errorf("expected WOL port 9, got %d", payload.BroadcastPort)
 	}
 	if payload.Hostname != "test-host" {
 		t.Errorf("expected hostname test-host, got %s", payload.Hostname)

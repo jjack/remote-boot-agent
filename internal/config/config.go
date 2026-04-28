@@ -25,8 +25,10 @@ type InitSystemConfig struct {
 }
 
 type HostConfig struct {
-	MACAddress string `mapstructure:"mac_address"`
-	Hostname   string `mapstructure:"hostname"`
+	MACAddress       string `mapstructure:"mac_address"`
+	Hostname         string `mapstructure:"hostname"`
+	BroadcastAddress string `mapstructure:"broadcast_address"`
+	BroadcastPort    int    `mapstructure:"broadcast_port"`
 }
 
 type HomeAssistantConfig struct {
@@ -47,6 +49,8 @@ func Load(cfgFile string, flags *pflag.FlagSet) (*Config, error) {
 	if flags != nil {
 		_ = v.BindPFlag("host.mac_address", flags.Lookup("mac"))
 		_ = v.BindPFlag("host.hostname", flags.Lookup("hostname"))
+		_ = v.BindPFlag("host.broadcast_address", flags.Lookup("broadcast-address"))
+		_ = v.BindPFlag("host.broadcast_port", flags.Lookup("wol-port"))
 		_ = v.BindPFlag("bootloader.name", flags.Lookup("bootloader"))
 		_ = v.BindPFlag("bootloader.config_path", flags.Lookup("bootloader-path"))
 		_ = v.BindPFlag("initsystem.name", flags.Lookup("init-system"))
@@ -72,6 +76,8 @@ func Save(cfg *Config, path string) error {
 	v := viper.New()
 	v.Set("host.mac_address", cfg.Host.MACAddress)
 	v.Set("host.hostname", cfg.Host.Hostname)
+	v.Set("host.broadcast_address", cfg.Host.BroadcastAddress)
+	v.Set("host.broadcast_port", cfg.Host.BroadcastPort)
 	v.Set("bootloader.name", cfg.Bootloader.Name)
 	v.Set("bootloader.config_path", cfg.Bootloader.ConfigPath)
 	v.Set("initsystem.name", cfg.InitSystem.Name)
