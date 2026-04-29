@@ -67,6 +67,13 @@ func TestResolveBootloader(t *testing.T) {
 	if blDetect == nil {
 		t.Fatal("expected detected bootloader to not be nil")
 	}
+
+	// Detect fail
+	emptyRegistry := bootloader.NewRegistry()
+	_, errDetectFail := ResolveBootloader(context.Background(), "", emptyRegistry)
+	if errDetectFail == nil {
+		t.Fatal("expected error when detecting bootloader fails")
+	}
 }
 
 func TestResolveInitSystem(t *testing.T) {
@@ -114,6 +121,13 @@ func TestResolveInitSystem(t *testing.T) {
 	if errDetect != nil && errDetect.Error() != "init system detection failed: no supported init system detected" {
 		t.Fatalf("unexpected error message: %v", errDetect)
 	}
+
+	// Detect fail explicitly
+	emptyRegistry := initsystem.NewRegistry()
+	_, errDetectFail := ResolveInitSystem(context.Background(), "", emptyRegistry)
+	if errDetectFail == nil {
+		t.Fatal("expected error when detecting init system fails")
+	}
 }
 
 func TestCLI_Execute(t *testing.T) {
@@ -151,5 +165,36 @@ func TestCLI_PersistentPreRun_ConfigParseFail(t *testing.T) {
 	err = cli.Execute()
 	if err == nil {
 		t.Fatal("expected error on malformed config file")
+	}
+}
+
+func TestCLI_PersistentPreRun_ConfigValidateFail(t *testing.T) {
+	f, err := os.CreateTemp("", "empty-*.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Remove(f.Name()) }()
+	_, _ = f.Write([]byte("{}")) // Empty config will parse successfully, but fail domain validation
+	_ = f.Close()
+
+	cli := NewCLI()
+	cli.RootCmd.SetArgs([]string{"options", "list", "--config", f.Name()})
+	err = cli.Execute()
+	if err == nil {
+		t.Fatal("expected error on invalid config file")
+	}
+}
+
+func TestCLI_PersistentPreRun_ConfigGenerate(t *testing.T) {
+	cli := NewCLI()
+
+	cmd, _, err := cli.RootCmd.Find([]string{"config", "generate"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = cli.RootCmd.PersistentPreRunE(cmd, []string{})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
 	}
 }
