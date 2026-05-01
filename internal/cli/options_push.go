@@ -32,6 +32,7 @@ func NewPushCmd(deps *CommandDeps) *cobra.Command {
 			}
 
 			hostCfg := deps.Config.Server
+			haCfg := deps.Config.HomeAssistant
 			payload := ha.PushPayload{
 				MACAddress:       hostCfg.MACAddress,
 				BroadcastAddress: hostCfg.BroadcastAddress,
@@ -39,11 +40,10 @@ func NewPushCmd(deps *CommandDeps) *cobra.Command {
 				Bootloader:       bl.Name(),
 				Name:             hostCfg.Name,
 				Server:           hostCfg.Server,
-				EntityType:       string(hostCfg.EntityType),
+				EntityType:       string(haCfg.EntityType),
 				BootOptions:      bootOptions,
 			}
 
-			haCfg := deps.Config.HomeAssistant
 			if haCfg.URL == "" || haCfg.WebhookID == "" {
 				return ErrMissingHAConfig
 			}

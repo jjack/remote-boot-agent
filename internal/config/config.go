@@ -32,17 +32,17 @@ type InitSystemConfig struct {
 }
 
 type ServerConfig struct {
-	EntityType       EntityType `mapstructure:"entity_type"`
-	Server           string     `mapstructure:"host"`
-	MACAddress       string     `mapstructure:"mac_address"`
-	Name             string     `mapstructure:"name"`
-	BroadcastAddress string     `mapstructure:"broadcast_address"`
-	BroadcastPort    int        `mapstructure:"broadcast_port"`
+	Server           string `mapstructure:"host"`
+	MACAddress       string `mapstructure:"mac_address"`
+	Name             string `mapstructure:"name"`
+	BroadcastAddress string `mapstructure:"broadcast_address"`
+	BroadcastPort    int    `mapstructure:"broadcast_port"`
 }
 
 type HomeAssistantConfig struct {
-	URL       string `mapstructure:"url"`
-	WebhookID string `mapstructure:"webhook_id"`
+	EntityType EntityType `mapstructure:"entity_type"`
+	URL        string     `mapstructure:"url"`
+	WebhookID  string     `mapstructure:"webhook_id"`
 }
 
 func Load(cfgFile string, flags *pflag.FlagSet) (*Config, error) {
@@ -59,12 +59,12 @@ func Load(cfgFile string, flags *pflag.FlagSet) (*Config, error) {
 		_ = v.BindPFlag("host.mac_address", flags.Lookup("mac"))
 		_ = v.BindPFlag("host.name", flags.Lookup("name"))
 		_ = v.BindPFlag("host.host", flags.Lookup("host"))
-		_ = v.BindPFlag("host.entity_type", flags.Lookup("entity-type"))
 		_ = v.BindPFlag("host.broadcast_address", flags.Lookup("broadcast-address"))
 		_ = v.BindPFlag("host.broadcast_port", flags.Lookup("wol-port"))
 		_ = v.BindPFlag("bootloader.name", flags.Lookup("bootloader"))
 		_ = v.BindPFlag("bootloader.config_path", flags.Lookup("bootloader-path"))
 		_ = v.BindPFlag("initsystem.name", flags.Lookup("init-system"))
+		_ = v.BindPFlag("homeassistant.entity_type", flags.Lookup("entity-type"))
 		_ = v.BindPFlag("homeassistant.url", flags.Lookup("hass-url"))
 		_ = v.BindPFlag("homeassistant.webhook_id", flags.Lookup("hass-webhook"))
 	}
@@ -88,12 +88,12 @@ func Save(cfg *Config, path string) error {
 	v.Set("host.mac_address", cfg.Server.MACAddress)
 	v.Set("host.name", cfg.Server.Name)
 	v.Set("host.host", cfg.Server.Server)
-	v.Set("host.entity_type", cfg.Server.EntityType)
 	v.Set("host.broadcast_address", cfg.Server.BroadcastAddress)
 	v.Set("host.broadcast_port", cfg.Server.BroadcastPort)
 	v.Set("bootloader.name", cfg.Bootloader.Name)
 	v.Set("bootloader.config_path", cfg.Bootloader.ConfigPath)
 	v.Set("initsystem.name", cfg.InitSystem.Name)
+	v.Set("homeassistant.entity_type", cfg.HomeAssistant.EntityType)
 	v.Set("homeassistant.url", cfg.HomeAssistant.URL)
 	v.Set("homeassistant.webhook_id", cfg.HomeAssistant.WebhookID)
 

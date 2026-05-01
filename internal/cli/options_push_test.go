@@ -51,15 +51,15 @@ func TestPushBootOptionsCommand(t *testing.T) {
 			BroadcastPort:    9,
 			Name:             "test-name",
 			Server:           "test-host",
-			EntityType:       config.EntityTypeButton,
 		},
 		Bootloader: config.BootloaderConfig{
 			Name:       "grub",
 			ConfigPath: tempGrubPath,
 		},
 		HomeAssistant: config.HomeAssistantConfig{
-			URL:       ts.URL,
-			WebhookID: "test-webhook",
+			URL:        ts.URL,
+			WebhookID:  "test-webhook",
+			EntityType: config.EntityTypeButton,
 		},
 	}
 

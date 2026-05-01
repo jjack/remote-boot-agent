@@ -113,14 +113,14 @@ func TestConfigValidate(t *testing.T) {
 		Server: ServerConfig{
 			MACAddress:       "00:11:22:33:44:55",
 			Name:             "Test Server",
-			EntityType:       EntityTypeButton,
-			Server:             "test-host",
+			Server:           "test-host",
 			BroadcastAddress: "192.168.1.255",
 			BroadcastPort:    9,
 		},
 		HomeAssistant: HomeAssistantConfig{
-			URL:       "http://localhost:8123",
-			WebhookID: "test_webhook",
+			URL:        "http://localhost:8123",
+			WebhookID:  "test_webhook",
+			EntityType: EntityTypeButton,
 		},
 	}
 	if err := cfg.Validate(); err != nil {

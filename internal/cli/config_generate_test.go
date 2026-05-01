@@ -251,7 +251,7 @@ func buildMockSurveyAskOne(triggerErrorOn string) func(survey.Prompt, interface{
 			switch pt.Message {
 			case "Name (how Home Assistant will refer to your machine):":
 				*(response.(*string)) = "my-host"
-			case "Enter static IP address:":
+			case "Enter server address:":
 				*(response.(*string)) = "192.168.1.100"
 			case "WOL Broadcast Address:":
 				*(response.(*string)) = "192.168.1.255"
@@ -266,10 +266,10 @@ func buildMockSurveyAskOne(triggerErrorOn string) func(survey.Prompt, interface{
 			}
 		case *survey.Select:
 			switch pt.Message {
-			case "Server format for ping checks (Warning: If you choose IP, it must be static):":
-				*(response.(*string)) = "Hostname"
-			case "Home Assistant Entity Type:":
-				*(response.(*string)) = "button"
+			case "Server address for ping checks (Warning: If you choose an IP, it must be static):":
+				*(response.(*string)) = "detected-host"
+			case "Home Assistant Entity Type (buttons cannot track on/off states, switches can):":
+				*(response.(*string)) = "switch"
 			case "Select Physical WOL Interface":
 				*(response.(*string)) = "eth0"
 			case "Multiple WOL Subnet/Broadcast Addresses were discovered. Please select one:":
@@ -286,13 +286,11 @@ func buildMockSurveyAskOne(triggerErrorOn string) func(survey.Prompt, interface{
 
 func TestGenerateConfigSurvey_Success(t *testing.T) {
 	oldSurveyAskOne := surveyAskOne
-	oldSystemGetBroadcastAddresses := systemGetBroadcastAddresses
 	oldDiscoverHomeAssistant := discoverHomeAssistant
 	oldDetectSystemHostname := detectSystemHostname
 	oldGetSystemInterfaces := getSystemInterfaces
 	defer func() {
 		surveyAskOne = oldSurveyAskOne
-		systemGetBroadcastAddresses = oldSystemGetBroadcastAddresses
 		discoverHomeAssistant = oldDiscoverHomeAssistant
 		detectSystemHostname = oldDetectSystemHostname
 		getSystemInterfaces = oldGetSystemInterfaces
@@ -300,15 +298,16 @@ func TestGenerateConfigSurvey_Success(t *testing.T) {
 
 	surveyAskOne = buildMockSurveyAskOne("")
 
-	systemGetBroadcastAddresses = func(mac string) ([]string, error) {
-		return []string{"192.168.1.255", "10.0.0.255"}, nil // Trigger multiple broadcasts path
-	}
-
 	discoverHomeAssistant = func(ctx context.Context) (string, error) { return "http://hass.local:8123", nil }
 	detectSystemHostname = func() (string, error) { return "detected-host", nil }
 	getSystemInterfaces = func() ([]system.InterfaceInfo, error) {
 		return []system.InterfaceInfo{
-			{Label: "eth0", Value: "00:11:22:33:44:55"},
+			{
+				Label:       "eth0",
+				MAC:         "00:11:22:33:44:55",
+				IPs:         []string{"192.168.1.100", "10.0.0.100"},
+				IPBroadcast: map[string]string{"192.168.1.100": "192.168.1.255", "10.0.0.100": "10.0.0.255"},
+			},
 		}, nil
 	}
 
@@ -324,8 +323,8 @@ func TestGenerateConfigSurvey_Success(t *testing.T) {
 	if cfg.Server.Server != "detected-host" {
 		t.Errorf("expected host detected-host, got %s", cfg.Server.Server)
 	}
-	if cfg.Server.EntityType != config.EntityTypeButton {
-		t.Errorf("expected entity type button, got %s", cfg.Server.EntityType)
+	if cfg.HomeAssistant.EntityType != config.EntityTypeSwitch {
+		t.Errorf("expected entity type switch, got %s", cfg.HomeAssistant.EntityType)
 	}
 	if cfg.Server.BroadcastAddress != "192.168.1.255" {
 		t.Errorf("expected BroadcastAddress 192.168.1.255, got %s", cfg.Server.BroadcastAddress)
@@ -340,31 +339,32 @@ func TestGenerateConfigSurvey_Success(t *testing.T) {
 
 func TestGenerateConfigSurvey_AskOneErrors(t *testing.T) {
 	oldSurveyAskOne := surveyAskOne
-	oldSystemGetBroadcastAddresses := systemGetBroadcastAddresses
 	oldDiscoverHomeAssistant := discoverHomeAssistant
 	oldDetectSystemHostname := detectSystemHostname
 	oldGetSystemInterfaces := getSystemInterfaces
 	defer func() {
 		surveyAskOne = oldSurveyAskOne
-		systemGetBroadcastAddresses = oldSystemGetBroadcastAddresses
 		discoverHomeAssistant = oldDiscoverHomeAssistant
 		detectSystemHostname = oldDetectSystemHostname
 		getSystemInterfaces = oldGetSystemInterfaces
 	}()
 
-	systemGetBroadcastAddresses = func(mac string) ([]string, error) { return []string{"192.168.1.255"}, nil }
 	discoverHomeAssistant = func(ctx context.Context) (string, error) { return "http://hass.local:8123", nil }
 	detectSystemHostname = func() (string, error) { return "detected-host", nil }
 	getSystemInterfaces = func() ([]system.InterfaceInfo, error) {
-		return []system.InterfaceInfo{{Label: "eth0", Value: "00:11:22:33:44:55"}}, nil
+		return []system.InterfaceInfo{{
+			Label: "eth0",
+			MAC:   "00:11:22:33:44:55",
+			IPs:   []string{"192.168.1.100"},
+		}}, nil
 	}
 
 	deps := setupSurveyDeps()
 	errorSteps := []string{
+		"Home Assistant Entity Type (buttons cannot track on/off states, switches can):",
 		"Name (how Home Assistant will refer to your machine):",
-		"Server format for ping checks (Warning: If you choose IP, it must be static):",
-		"Home Assistant Entity Type:",
 		"Select Physical WOL Interface",
+		"Server address for ping checks (Warning: If you choose an IP, it must be static):",
 		"WOL Broadcast Address:",
 		"Wake-on-LAN Port (leave blank for default):",
 		"Bootloader:",
@@ -386,7 +386,12 @@ func TestGenerateConfigSurvey_AskOneErrors(t *testing.T) {
 
 	t.Run("Multiple Subnet Selection Error", func(t *testing.T) {
 		surveyAskOne = buildMockSurveyAskOne("Multiple WOL Subnet/Broadcast Addresses were discovered. Please select one:")
-		systemGetBroadcastAddresses = func(mac string) ([]string, error) { return []string{"192.168.1.255", "10.0.0.255"}, nil }
+		getSystemInterfaces = func() ([]system.InterfaceInfo, error) {
+			return []system.InterfaceInfo{{
+				Label: "eth0", MAC: "00:11:22:33:44:55",
+				IPBroadcast: map[string]string{"192.168.1.100": "192.168.1.255", "10.0.0.100": "10.0.0.255"},
+			}}, nil
+		}
 		_, err := generateConfigInteractive(context.Background(), deps)
 		if err == nil || err.Error() != "simulated survey error" {
 			t.Errorf("expected simulated survey error, got %v", err)
@@ -408,7 +413,7 @@ func TestGenerateConfigSurvey_OptErrors(t *testing.T) {
 
 		detectSystemHostname = func() (string, error) { return "host", nil }
 		getSystemInterfaces = func() ([]system.InterfaceInfo, error) {
-			return []system.InterfaceInfo{{Label: "eth0", Value: "invalid-mac"}}, nil
+			return []system.InterfaceInfo{{Label: "eth0", MAC: "invalid-mac"}}, nil
 		}
 
 		deps := setupSurveyDeps()

@@ -14,7 +14,6 @@ func TestConfigValidateCmd_Valid(t *testing.T) {
 			MACAddress:       "00:11:22:33:44:55",
 			Name:             "test-host",
 			Server:           "test-host",
-			EntityType:       config.EntityTypeButton,
 			BroadcastAddress: "192.168.1.255",
 			BroadcastPort:    9,
 		},
@@ -26,8 +25,9 @@ func TestConfigValidateCmd_Valid(t *testing.T) {
 			Name: "systemd",
 		},
 		HomeAssistant: config.HomeAssistantConfig{
-			URL:       "http://ha.local",
-			WebhookID: "test-webhook",
+			URL:        "http://ha.local",
+			WebhookID:  "test-webhook",
+			EntityType: config.EntityTypeButton,
 		},
 	}
 

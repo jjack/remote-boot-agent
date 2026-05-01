@@ -15,7 +15,6 @@ func TestConfig_SaveAndLoad(t *testing.T) {
 			MACAddress:       "00:11:22:33:44:55",
 			Name:             "Test Server",
 			Server:           "test-host",
-			EntityType:       EntityTypeButton,
 			BroadcastAddress: "192.168.1.255",
 			BroadcastPort:    9,
 		},
@@ -27,8 +26,9 @@ func TestConfig_SaveAndLoad(t *testing.T) {
 			Name: "systemd",
 		},
 		HomeAssistant: HomeAssistantConfig{
-			URL:       "http://ha.local",
-			WebhookID: "test-webhook",
+			URL:        "http://ha.local",
+			WebhookID:  "test-webhook",
+			EntityType: EntityTypeButton,
 		},
 	}
 

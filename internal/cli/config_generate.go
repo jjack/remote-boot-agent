@@ -17,13 +17,12 @@ import (
 )
 
 var (
-	surveyAskOne                = survey.AskOne
-	systemGetBroadcastAddresses = system.GetBroadcastAddresses
-	discoverHomeAssistant       = homeassistant.Discover
-	detectSystemHostname        = system.DetectHostname
-	getSystemInterfaces         = system.GetInterfaceOptions
-	saveConfigFile              = config.Save
-	runGenerateSurvey           = generateConfigInteractive
+	surveyAskOne          = survey.AskOne
+	discoverHomeAssistant = homeassistant.Discover
+	detectSystemHostname  = system.DetectHostname
+	getSystemInterfaces   = system.GetInterfaceOptions
+	saveConfigFile        = config.Save
+	runGenerateSurvey     = generateConfigInteractive
 )
 
 type haDiscoveryResult struct {
@@ -40,7 +39,7 @@ func surveyValidator(valFunc func(string) error) survey.Validator {
 	}
 }
 
-func askHostConfig() (config.ServerConfig, error) {
+func askHostConfig(entityType config.EntityType) (config.ServerConfig, error) {
 	hostname, err := detectSystemHostname()
 	if err != nil {
 		return config.ServerConfig{}, err
@@ -49,40 +48,9 @@ func askHostConfig() (config.ServerConfig, error) {
 	var finalName string
 	err = surveyAskOne(&survey.Input{
 		Message: "Name (how Home Assistant will refer to your machine):",
+		Help:    "Me rhonda, help help me.",
 		Default: hostname,
 	}, &finalName)
-	if err != nil {
-		return config.ServerConfig{}, err
-	}
-
-	var hostChoice string
-	err = surveyAskOne(&survey.Select{
-		Message: "Server format for ping checks (Warning: If you choose IP, it must be static):",
-		Options: []string{"Hostname", "IP Address"},
-		Default: "Hostname",
-	}, &hostChoice)
-	if err != nil {
-		return config.ServerConfig{}, err
-	}
-
-	var finalHost string
-	if hostChoice == "Hostname" {
-		finalHost = hostname
-	} else {
-		err = surveyAskOne(&survey.Input{
-			Message: "Enter static IP address:",
-		}, &finalHost)
-		if err != nil {
-			return config.ServerConfig{}, err
-		}
-	}
-
-	var entityType string
-	err = surveyAskOne(&survey.Select{
-		Message: "Home Assistant Entity Type:",
-		Options: []string{"button", "switch"},
-		Default: "button",
-	}, &entityType)
 	if err != nil {
 		return config.ServerConfig{}, err
 	}
@@ -93,10 +61,10 @@ func askHostConfig() (config.ServerConfig, error) {
 	}
 
 	var ifaceOptions []string
-	ifaceMap := make(map[string]string)
+	ifaceMap := make(map[string]system.InterfaceInfo)
 	for _, opt := range interfaceOptions {
 		ifaceOptions = append(ifaceOptions, opt.Label)
-		ifaceMap[opt.Label] = opt.Value
+		ifaceMap[opt.Label] = opt
 	}
 
 	var selectedIfaceLabel string
@@ -108,14 +76,56 @@ func askHostConfig() (config.ServerConfig, error) {
 		return config.ServerConfig{}, err
 	}
 
-	macAddress := ifaceMap[selectedIfaceLabel]
+	selectedIface := ifaceMap[selectedIfaceLabel]
+	macAddress := selectedIface.MAC
 	if err := config.ValidateMACAddress(macAddress); err != nil {
 		return config.ServerConfig{}, err
 	}
 
-	broadcastAddrs, _ := systemGetBroadcastAddresses(macAddress)
-	var chosenBroadcast string
-	if len(broadcastAddrs) > 0 {
+	hostOptions := []string{hostname}
+	hostOptions = append(hostOptions, selectedIface.IPs...)
+	hostOptions = append(hostOptions, "Custom / Manual Entry")
+
+	var finalHost string
+	if entityType == "switch" {
+		err = surveyAskOne(&survey.Select{
+			Message: "Server address for ping checks (Warning: If you choose an IP, it must be static):",
+			Options: hostOptions,
+			Default: hostname,
+		}, &finalHost)
+		if err != nil {
+			return config.ServerConfig{}, err
+		}
+
+		if finalHost == "Custom / Manual Entry" {
+			err = surveyAskOne(&survey.Input{
+				Message: "Enter server address:",
+			}, &finalHost)
+			if err != nil {
+				return config.ServerConfig{}, err
+			}
+		}
+	} else {
+		finalHost = hostname
+	}
+
+	var finalBroadcast string
+	if bc, ok := selectedIface.IPBroadcast[finalHost]; ok {
+		finalBroadcast = bc
+	} else {
+		var broadcastAddrs []string
+		seen := make(map[string]bool)
+		for _, bc := range selectedIface.IPBroadcast {
+			if !seen[bc] {
+				broadcastAddrs = append(broadcastAddrs, bc)
+				seen[bc] = true
+			}
+		}
+		if len(broadcastAddrs) == 0 {
+			broadcastAddrs = []string{"255.255.255.255"}
+		}
+
+		chosenBroadcast := "9"
 		if len(broadcastAddrs) == 1 {
 			chosenBroadcast = broadcastAddrs[0]
 		} else {
@@ -127,15 +137,14 @@ func askHostConfig() (config.ServerConfig, error) {
 				return config.ServerConfig{}, err
 			}
 		}
-	}
 
-	var finalBroadcast string
-	err = surveyAskOne(&survey.Input{
-		Message: "WOL Broadcast Address:",
-		Default: chosenBroadcast,
-	}, &finalBroadcast)
-	if err != nil {
-		return config.ServerConfig{}, err
+		err = surveyAskOne(&survey.Input{
+			Message: "WOL Broadcast Address:",
+			Default: chosenBroadcast,
+		}, &finalBroadcast)
+		if err != nil {
+			return config.ServerConfig{}, err
+		}
 	}
 
 	var wolPortStr string
@@ -154,7 +163,6 @@ func askHostConfig() (config.ServerConfig, error) {
 	return config.ServerConfig{
 		Name:             finalName,
 		Server:           finalHost,
-		EntityType:       config.EntityType(entityType),
 		MACAddress:       macAddress,
 		BroadcastAddress: finalBroadcast,
 		BroadcastPort:    wolPort,
@@ -238,7 +246,17 @@ func generateConfigInteractive(ctx context.Context, deps *CommandDeps) (*config.
 		haDiscoveryResultChan <- haDiscoveryResult{url: url, err: err}
 	}()
 
-	hostCfg, err := askHostConfig()
+	var entityType string
+	err := surveyAskOne(&survey.Select{
+		Message: "Home Assistant Entity Type (buttons cannot track on/off states, switches can):",
+		Options: []string{string(config.EntityTypeButton), string(config.EntityTypeSwitch)},
+		Default: string(config.EntityTypeButton),
+	}, &entityType)
+	if err != nil {
+		return nil, err
+	}
+
+	hostCfg, err := askHostConfig(config.EntityType(entityType))
 	if err != nil {
 		return nil, err
 	}
@@ -257,6 +275,7 @@ func generateConfigInteractive(ctx context.Context, deps *CommandDeps) (*config.
 	if err != nil {
 		return nil, err
 	}
+	haCfg.EntityType = config.EntityType(entityType)
 
 	return &config.Config{
 		Server:        hostCfg,
@@ -304,8 +323,8 @@ func NewConfigGenerateCmd(deps *CommandDeps) *cobra.Command {
 
 			fmt.Println("\nGenerated config (keys may be in a different order than shown here):")
 			fmt.Printf("---\n")
-			fmt.Printf("host:\n  name: %s\n  host: %s\n  entity_type: %s\n  mac_address: %s\n  broadcast_address: %s\n  broadcast_port: %d\n", cfg.Server.Name, cfg.Server.Server, cfg.Server.EntityType, cfg.Server.MACAddress, cfg.Server.BroadcastAddress, cfg.Server.BroadcastPort)
-			fmt.Printf("homeassistant:\n  url: %s\n  webhook_id: %s\n", cfg.HomeAssistant.URL, cfg.HomeAssistant.WebhookID)
+			fmt.Printf("host:\n  name: %s\n  host: %s\n  mac_address: %s\n  broadcast_address: %s\n  broadcast_port: %d\n", cfg.Server.Name, cfg.Server.Server, cfg.Server.MACAddress, cfg.Server.BroadcastAddress, cfg.Server.BroadcastPort)
+			fmt.Printf("homeassistant:\n  url: %s\n  webhook_id: %s\n  entity_type: %s\n", cfg.HomeAssistant.URL, cfg.HomeAssistant.WebhookID, cfg.HomeAssistant.EntityType)
 			fmt.Printf("bootloader:\n  name: %s\n  config_path: %s\n", cfg.Bootloader.Name, cfg.Bootloader.ConfigPath)
 			fmt.Printf("initsystem:\n  name: %s\n", cfg.InitSystem.Name)
 

@@ -85,7 +85,7 @@ func (c *Config) Validate() error {
 	if err := ValidateHost(c.Server.Server); err != nil {
 		return err
 	}
-	if err := ValidateEntityType(c.Server.EntityType); err != nil {
+	if err := ValidateEntityType(c.HomeAssistant.EntityType); err != nil {
 		return err
 	}
 	if err := ValidateURL(c.HomeAssistant.URL); err != nil {
