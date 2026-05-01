@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"net"
 	"strings"
 	"testing"
 
@@ -11,7 +12,6 @@ import (
 	"github.com/jjack/remote-boot-agent/internal/bootloader"
 	"github.com/jjack/remote-boot-agent/internal/config"
 	"github.com/jjack/remote-boot-agent/internal/initsystem"
-	"github.com/jjack/remote-boot-agent/internal/system"
 )
 
 type mockGenInitSystem struct{ active bool }
@@ -253,7 +253,7 @@ func buildMockSurveyAskOne(triggerErrorOn string) func(survey.Prompt, interface{
 				*(response.(*string)) = "my-host"
 			case "Enter server address:":
 				*(response.(*string)) = "192.168.1.100"
-			case "WOL Broadcast Address:":
+			case "WOL Broadcast Address (leave blank for default):":
 				*(response.(*string)) = "192.168.1.255"
 			case "Wake-on-LAN Port (leave blank for default):":
 				*(response.(*string)) = "" // test fallback
@@ -288,27 +288,27 @@ func TestGenerateConfigSurvey_Success(t *testing.T) {
 	oldSurveyAskOne := surveyAskOne
 	oldDiscoverHomeAssistant := discoverHomeAssistant
 	oldDetectSystemHostname := detectSystemHostname
-	oldGetSystemInterfaces := getSystemInterfaces
+	oldGetWOLInterfaces := getWOLInterfaces
+	oldGetIPv4Info := getIPv4Info
 	defer func() {
 		surveyAskOne = oldSurveyAskOne
 		discoverHomeAssistant = oldDiscoverHomeAssistant
 		detectSystemHostname = oldDetectSystemHostname
-		getSystemInterfaces = oldGetSystemInterfaces
+		getWOLInterfaces = oldGetWOLInterfaces
+		getIPv4Info = oldGetIPv4Info
 	}()
 
 	surveyAskOne = buildMockSurveyAskOne("")
 
 	discoverHomeAssistant = func(ctx context.Context) (string, error) { return "http://hass.local:8123", nil }
 	detectSystemHostname = func() (string, error) { return "detected-host", nil }
-	getSystemInterfaces = func() ([]system.InterfaceInfo, error) {
-		return []system.InterfaceInfo{
-			{
-				Label:       "eth0",
-				MAC:         "00:11:22:33:44:55",
-				IPs:         []string{"192.168.1.100", "10.0.0.100"},
-				IPBroadcast: map[string]string{"192.168.1.100": "192.168.1.255", "10.0.0.100": "10.0.0.255"},
-			},
-		}, nil
+
+	getWOLInterfaces = func() ([]net.Interface, error) {
+		mac, _ := net.ParseMAC("00:11:22:33:44:55")
+		return []net.Interface{{Name: "eth0", HardwareAddr: mac}}, nil
+	}
+	getIPv4Info = func(inf net.Interface) ([]string, map[string]string) {
+		return []string{"192.168.1.100", "10.0.0.100"}, map[string]string{"192.168.1.100": "192.168.1.255", "10.0.0.100": "10.0.0.255"}
 	}
 
 	deps := setupSurveyDeps()
@@ -341,22 +341,25 @@ func TestGenerateConfigSurvey_AskOneErrors(t *testing.T) {
 	oldSurveyAskOne := surveyAskOne
 	oldDiscoverHomeAssistant := discoverHomeAssistant
 	oldDetectSystemHostname := detectSystemHostname
-	oldGetSystemInterfaces := getSystemInterfaces
+	oldGetWOLInterfaces := getWOLInterfaces
+	oldGetIPv4Info := getIPv4Info
 	defer func() {
 		surveyAskOne = oldSurveyAskOne
 		discoverHomeAssistant = oldDiscoverHomeAssistant
 		detectSystemHostname = oldDetectSystemHostname
-		getSystemInterfaces = oldGetSystemInterfaces
+		getWOLInterfaces = oldGetWOLInterfaces
+		getIPv4Info = oldGetIPv4Info
 	}()
 
 	discoverHomeAssistant = func(ctx context.Context) (string, error) { return "http://hass.local:8123", nil }
 	detectSystemHostname = func() (string, error) { return "detected-host", nil }
-	getSystemInterfaces = func() ([]system.InterfaceInfo, error) {
-		return []system.InterfaceInfo{{
-			Label: "eth0",
-			MAC:   "00:11:22:33:44:55",
-			IPs:   []string{"192.168.1.100"},
-		}}, nil
+
+	getWOLInterfaces = func() ([]net.Interface, error) {
+		mac, _ := net.ParseMAC("00:11:22:33:44:55")
+		return []net.Interface{{Name: "eth0", HardwareAddr: mac}}, nil
+	}
+	getIPv4Info = func(inf net.Interface) ([]string, map[string]string) {
+		return []string{"192.168.1.100"}, map[string]string{"192.168.1.100": "192.168.1.255"}
 	}
 
 	deps := setupSurveyDeps()
@@ -365,7 +368,7 @@ func TestGenerateConfigSurvey_AskOneErrors(t *testing.T) {
 		"Name (how Home Assistant will refer to your machine):",
 		"Select Physical WOL Interface",
 		"Server address for ping checks (Warning: If you choose an IP, it must be static):",
-		"WOL Broadcast Address:",
+		"WOL Broadcast Address (leave blank for default):",
 		"Wake-on-LAN Port (leave blank for default):",
 		"Bootloader:",
 		"Bootloader Config Path:",
@@ -386,11 +389,12 @@ func TestGenerateConfigSurvey_AskOneErrors(t *testing.T) {
 
 	t.Run("Multiple Subnet Selection Error", func(t *testing.T) {
 		surveyAskOne = buildMockSurveyAskOne("Multiple WOL Subnet/Broadcast Addresses were discovered. Please select one:")
-		getSystemInterfaces = func() ([]system.InterfaceInfo, error) {
-			return []system.InterfaceInfo{{
-				Label: "eth0", MAC: "00:11:22:33:44:55",
-				IPBroadcast: map[string]string{"192.168.1.100": "192.168.1.255", "10.0.0.100": "10.0.0.255"},
-			}}, nil
+		getWOLInterfaces = func() ([]net.Interface, error) {
+			mac, _ := net.ParseMAC("00:11:22:33:44:55")
+			return []net.Interface{{Name: "eth0", HardwareAddr: mac}}, nil
+		}
+		getIPv4Info = func(inf net.Interface) ([]string, map[string]string) {
+			return []string{"192.168.1.100", "10.0.0.100"}, map[string]string{"192.168.1.100": "192.168.1.255", "10.0.0.100": "10.0.0.255"}
 		}
 		_, err := generateConfigInteractive(context.Background(), deps)
 		if err == nil || err.Error() != "simulated survey error" {
@@ -403,17 +407,17 @@ func TestGenerateConfigSurvey_OptErrors(t *testing.T) {
 	t.Run("Invalid MAC Address", func(t *testing.T) {
 		oldSurveyAskOne := surveyAskOne
 		oldDetectSystemHostname := detectSystemHostname
-		oldGetSystemInterfaces := getSystemInterfaces
+		oldGetWOLInterfaces := getWOLInterfaces
 		surveyAskOne = buildMockSurveyAskOne("")
 		defer func() {
 			surveyAskOne = oldSurveyAskOne
 			detectSystemHostname = oldDetectSystemHostname
-			getSystemInterfaces = oldGetSystemInterfaces
+			getWOLInterfaces = oldGetWOLInterfaces
 		}()
 
 		detectSystemHostname = func() (string, error) { return "host", nil }
-		getSystemInterfaces = func() ([]system.InterfaceInfo, error) {
-			return []system.InterfaceInfo{{Label: "eth0", MAC: "invalid-mac"}}, nil
+		getWOLInterfaces = func() ([]net.Interface, error) {
+			return []net.Interface{{Name: "eth0", HardwareAddr: nil}}, nil
 		}
 
 		deps := setupSurveyDeps()

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 
@@ -20,9 +21,16 @@ var (
 	surveyAskOne          = survey.AskOne
 	discoverHomeAssistant = homeassistant.Discover
 	detectSystemHostname  = system.DetectHostname
-	getSystemInterfaces   = system.GetInterfaceOptions
+	getWOLInterfaces      = system.GetWOLInterfaces
+	getIPv4Info           = system.GetIPv4Info
 	saveConfigFile        = config.Save
 	runGenerateSurvey     = generateConfigInteractive
+)
+
+const (
+	DefaultBroadcastAddress = "255.255.255.255"
+	DefaultBroadcastPort    = "9"
+	OptionCustomHost        = "Custom / Manual Entry"
 )
 
 type haDiscoveryResult struct {
@@ -55,39 +63,48 @@ func askHostConfig(entityType config.EntityType) (config.ServerConfig, error) {
 		return config.ServerConfig{}, err
 	}
 
-	interfaceOptions, err := getSystemInterfaces()
+	wolInterfaces, err := getWOLInterfaces()
 	if err != nil {
 		return config.ServerConfig{}, err
 	}
 
-	var ifaceOptions []string
-	ifaceMap := make(map[string]system.InterfaceInfo)
-	for _, opt := range interfaceOptions {
-		ifaceOptions = append(ifaceOptions, opt.Label)
-		ifaceMap[opt.Label] = opt
+	var ifaceNames []string
+	ifaceMap := make(map[string]net.Interface)
+	for _, inf := range wolInterfaces {
+		ifaceNames = append(ifaceNames, inf.Name)
+		ifaceMap[inf.Name] = inf
 	}
 
-	var selectedIfaceLabel string
+	var selectedIfaceName string
 	err = surveyAskOne(&survey.Select{
 		Message: "Select Physical WOL Interface",
-		Options: ifaceOptions,
-	}, &selectedIfaceLabel)
+		Options: ifaceNames,
+		Description: func(value string, index int) string {
+			if inf, ok := ifaceMap[value]; ok {
+				ips, _ := getIPv4Info(inf)
+				return fmt.Sprintf("(%s) [%s]", inf.HardwareAddr.String(), strings.Join(ips, ", "))
+			}
+			return ""
+		},
+	}, &selectedIfaceName)
 	if err != nil {
 		return config.ServerConfig{}, err
 	}
 
-	selectedIface := ifaceMap[selectedIfaceLabel]
-	macAddress := selectedIface.MAC
+	selectedIface := ifaceMap[selectedIfaceName]
+	macAddress := selectedIface.HardwareAddr.String()
 	if err := config.ValidateMACAddress(macAddress); err != nil {
 		return config.ServerConfig{}, err
 	}
 
-	hostOptions := []string{hostname}
-	hostOptions = append(hostOptions, selectedIface.IPs...)
-	hostOptions = append(hostOptions, "Custom / Manual Entry")
+	ips, ipBroadcasts := getIPv4Info(selectedIface)
 
-	var finalHost string
-	if entityType == "switch" {
+	hostOptions := []string{hostname}
+	hostOptions = append(hostOptions, ips...)
+	hostOptions = append(hostOptions, OptionCustomHost)
+
+	finalHost := hostname
+	if entityType == config.EntityTypeSwitch {
 		err = surveyAskOne(&survey.Select{
 			Message: "Server address for ping checks (Warning: If you choose an IP, it must be static):",
 			Options: hostOptions,
@@ -97,35 +114,33 @@ func askHostConfig(entityType config.EntityType) (config.ServerConfig, error) {
 			return config.ServerConfig{}, err
 		}
 
-		if finalHost == "Custom / Manual Entry" {
+		if finalHost == OptionCustomHost {
 			err = surveyAskOne(&survey.Input{
 				Message: "Enter server address:",
-			}, &finalHost)
+			}, &finalHost, survey.WithValidator(surveyValidator(config.ValidateHost)))
 			if err != nil {
 				return config.ServerConfig{}, err
 			}
 		}
-	} else {
-		finalHost = hostname
 	}
 
 	var finalBroadcast string
-	if bc, ok := selectedIface.IPBroadcast[finalHost]; ok {
+	if bc, ok := ipBroadcasts[finalHost]; ok {
 		finalBroadcast = bc
 	} else {
 		var broadcastAddrs []string
 		seen := make(map[string]bool)
-		for _, bc := range selectedIface.IPBroadcast {
+		for _, bc := range ipBroadcasts {
 			if !seen[bc] {
 				broadcastAddrs = append(broadcastAddrs, bc)
 				seen[bc] = true
 			}
 		}
 		if len(broadcastAddrs) == 0 {
-			broadcastAddrs = []string{"255.255.255.255"}
+			broadcastAddrs = []string{DefaultBroadcastAddress}
 		}
 
-		chosenBroadcast := "9"
+		chosenBroadcast := DefaultBroadcastPort
 		if len(broadcastAddrs) == 1 {
 			chosenBroadcast = broadcastAddrs[0]
 		} else {
@@ -139,9 +154,9 @@ func askHostConfig(entityType config.EntityType) (config.ServerConfig, error) {
 		}
 
 		err = surveyAskOne(&survey.Input{
-			Message: "WOL Broadcast Address:",
+			Message: "WOL Broadcast Address (leave blank for default):",
 			Default: chosenBroadcast,
-		}, &finalBroadcast)
+		}, &finalBroadcast, survey.WithValidator(surveyValidator(config.ValidateBroadcastAddress)))
 		if err != nil {
 			return config.ServerConfig{}, err
 		}
@@ -189,7 +204,7 @@ func askBootloaderConfig(ctx context.Context, registry *bootloader.Registry) (co
 		err = surveyAskOne(&survey.Input{
 			Message: "Bootloader Config Path:",
 			Default: blPath,
-		}, &blPath)
+		}, &blPath, survey.WithValidator(surveyValidator(config.ValidateBootloaderConfigPath)))
 		if err != nil {
 			return config.BootloaderConfig{}, err
 		}

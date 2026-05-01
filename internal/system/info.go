@@ -22,27 +22,6 @@ var (
 	ErrDetectHostname       = errors.New("failed to detect hostname")
 )
 
-type InterfaceInfo struct {
-	Name        string
-	MAC         string
-	Label       string
-	IPs         []string
-	IPBroadcast map[string]string
-}
-
-// GetIPAddrs returns all addresses for a given interface as strings.
-func GetIPAddrs(iface net.Interface) []string {
-	addrs, err := getAddrs(iface)
-	if err != nil {
-		return nil
-	}
-	var ipAddrs []string
-	for _, addr := range addrs {
-		ipAddrs = append(ipAddrs, addr.String())
-	}
-	return ipAddrs
-}
-
 // isWOLCapableInterface checks if the given network interface is suitable for WOL (has a MAC address, is up, is not loopback, and is not virtual).
 func isWOLCapableInterface(inf net.Interface) bool {
 	if len(inf.HardwareAddr) == 0 {
@@ -69,69 +48,67 @@ func isWOLCapableInterface(inf net.Interface) bool {
 	return os.IsNotExist(err)
 }
 
-// GetInterfaceOptions returns a slice of label/value pairs for use in selection UIs.
-func GetInterfaceOptions() ([]InterfaceInfo, error) {
+// GetWOLInterfaces returns a slice of net.Interface that are capable of Wake-on-LAN.
+func GetWOLInterfaces() ([]net.Interface, error) {
 	interfaces, err := netInterfaces()
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrListInterfaces, err)
 	}
 
-	var options []InterfaceInfo
+	var wolIfaces []net.Interface
 	for _, inf := range interfaces {
 		if !isWOLCapableInterface(inf) {
 			continue
 		}
-
-		macStr := inf.HardwareAddr.String()
-
-		var rawIPs []string
-		var ipList []string
-		ipBroadcast := make(map[string]string)
-
-		addrs, err := getAddrs(inf)
-		if err == nil {
-			for _, addr := range addrs {
-				rawIPs = append(rawIPs, addr.String())
-				if ipnet, ok := addr.(*net.IPNet); ok {
-					ipStr := ipnet.IP.String()
-					ipList = append(ipList, ipStr)
-
-					ip := ipnet.IP.To4()
-					if ip != nil {
-						mask := ipnet.Mask
-						if len(mask) == net.IPv6len {
-							mask = mask[12:]
-						}
-						if len(mask) == net.IPv4len {
-							broadcast := net.IPv4(
-								ip[0]|^mask[0],
-								ip[1]|^mask[1],
-								ip[2]|^mask[2],
-								ip[3]|^mask[3],
-							).String()
-							ipBroadcast[ipStr] = broadcast
-						}
-					}
-				}
-			}
-		}
-
-		ips := strings.Join(rawIPs, ", ")
-		label := fmt.Sprintf("%s (%s) [%s]", inf.Name, macStr, ips)
-		options = append(options, InterfaceInfo{
-			Name:        inf.Name,
-			MAC:         macStr,
-			Label:       label,
-			IPs:         ipList,
-			IPBroadcast: ipBroadcast,
-		})
+		wolIfaces = append(wolIfaces, inf)
 	}
 
-	if len(options) == 0 {
+	if len(wolIfaces) == 0 {
 		return nil, ErrNoSuitableInterfaces
 	}
 
-	return options, nil
+	return wolIfaces, nil
+}
+
+func getLastIP(ipnet *net.IPNet) net.IP {
+	// The net.IP mask is a byte slice. To get the last IP,
+	// we OR the IP with the inverse of the mask.
+	ip := ipnet.IP.To4()
+	if ip == nil {
+		ip = ipnet.IP // IPv6
+	}
+
+	last := make(net.IP, len(ip))
+	for i := 0; i < len(ip); i++ {
+		last[i] = ip[i] | ^ipnet.Mask[i]
+	}
+	return last
+}
+
+// GetIPv4Info returns a list of IPv4 addresses and a map of those addresses to their computed broadcast address.
+func GetIPv4Info(inf net.Interface) ([]string, map[string]string) {
+	var ips []string
+	broadcasts := make(map[string]string)
+
+	addrs, err := getAddrs(inf)
+	if err != nil {
+		return ips, broadcasts
+	}
+
+	for _, addr := range addrs {
+		if ipnet, ok := addr.(*net.IPNet); ok {
+			ip := ipnet.IP.To4()
+			if ip == nil {
+				ip = ipnet.IP // IPv6
+			}
+
+			ips = append(ips, ip.String())
+
+			broadcast := getLastIP(ipnet)
+			broadcasts[ip.String()] = broadcast.String()
+		}
+	}
+	return ips, broadcasts
 }
 
 func DetectHostname() (string, error) {

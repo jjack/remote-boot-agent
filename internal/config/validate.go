@@ -5,24 +5,37 @@ import (
 	"log/slog"
 	"net"
 	"net/url"
+	"os"
 	"regexp"
 	"strconv"
 )
 
 var (
-	ErrMACAddressEmpty      = errors.New("mac address cannot be empty")
-	ErrInvalidMACAddress    = errors.New("invalid MAC address format")
-	ErrURLEmpty             = errors.New("url cannot be empty")
-	ErrInvalidURL           = errors.New("invalid URL format")
-	ErrWebhookIDEmpty       = errors.New("webhook id cannot be empty")
-	ErrWebhookIDInvalidChar = errors.New("webhook id can only contain letters, numbers, hyphens, and underscores")
-	ErrBroadcastPortEmpty   = errors.New("WOL port cannot be empty")
-	ErrInvalidBroadcastPort = errors.New("invalid WOL port: must be a number between 1 and 65535")
-	ErrHostEmpty            = errors.New("host cannot be empty")
-	ErrInvalidHost          = errors.New("host must be a valid IP address or hostname (letters, numbers, hyphens, dots)")
-	ErrEntityTypeEmpty      = errors.New("entity type cannot be empty")
-	ErrInvalidEntityType    = errors.New("entity type must be either 'button' or 'switch'")
+	ErrBootloaderConfigPathEmpty    = errors.New("bootloader config path cannot be empty")
+	ErrBootloaderConfigPathNotExist = errors.New("bootloader config path does not exist")
+	ErrEntityTypeEmpty              = errors.New("entity type cannot be empty")
+	ErrHostEmpty                    = errors.New("host cannot be empty")
+	ErrInvalidBroadcastAddress      = errors.New("invalid WOL address: must be a valid IP address")
+	ErrInvalidBroadcastPort         = errors.New("invalid WOL port: must be a number between 1 and 65535")
+	ErrInvalidEntityType            = errors.New("entity type must be either 'button' or 'switch'")
+	ErrInvalidHost                  = errors.New("host must be a valid IP address or hostname (letters, numbers, hyphens, dots)")
+	ErrInvalidMACAddress            = errors.New("invalid MAC address format")
+	ErrInvalidURL                   = errors.New("invalid URL format")
+	ErrMACAddressEmpty              = errors.New("mac address cannot be empty")
+	ErrURLEmpty                     = errors.New("url cannot be empty")
+	ErrWebhookIDEmpty               = errors.New("webhook id cannot be empty")
+	ErrWebhookIDInvalidChar         = errors.New("webhook id can only contain letters, numbers, hyphens, and underscores")
 )
+
+func ValidateBootloaderConfigPath(v string) error {
+	if v == "" {
+		return ErrBootloaderConfigPathEmpty
+	}
+	if _, err := os.Stat(v); os.IsNotExist(err) {
+		return ErrBootloaderConfigPathNotExist
+	}
+	return nil
+}
 
 func ValidateMACAddress(v string) error {
 	if v == "" {
@@ -56,9 +69,21 @@ func ValidateWebhookID(v string) error {
 	return nil
 }
 
-func ValidateBroadcastPort(v string) error {
+func ValidateBroadcastAddress(v string) error {
+	// empty means use the default address - 255.255.255.255
 	if v == "" {
-		return ErrBroadcastPortEmpty
+		return nil
+	}
+	if net.ParseIP(v) == nil {
+		return ErrInvalidBroadcastAddress
+	}
+	return nil
+}
+
+func ValidateBroadcastPort(v string) error {
+	// empty means use the default port - 9
+	if v == "" {
+		return nil
 	}
 	port, err := strconv.Atoi(v)
 	if err != nil || port < 1 || port > 65535 {
@@ -95,6 +120,9 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := ValidateBroadcastPort(strconv.Itoa(c.Server.BroadcastPort)); err != nil {
+		return err
+	}
+	if err := ValidateBroadcastAddress(c.Server.BroadcastAddress); err != nil {
 		return err
 	}
 	return nil

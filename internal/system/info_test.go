@@ -8,8 +8,8 @@ import (
 	"testing"
 )
 
-func TestGetInterfaceOptions(t *testing.T) {
-	opts, err := GetInterfaceOptions()
+func TestGetWOLInterfaces(t *testing.T) {
+	opts, err := GetWOLInterfaces()
 	if err != nil {
 		if strings.Contains(err.Error(), "no suitable interfaces found") {
 			t.Skip("Skipping interface test: no suitable network interface found in this environment")
@@ -23,14 +23,11 @@ func TestGetInterfaceOptions(t *testing.T) {
 	}
 
 	for _, opt := range opts {
-		if !strings.Contains(opt.MAC, ":") {
-			t.Errorf("unrecognized MAC address format: %s", opt.MAC)
+		if opt.HardwareAddr.String() == "" {
+			t.Errorf("expected non-empty hardware address for %s", opt.Name)
 		}
-		if opt.Label == "" {
-			t.Error("expected non-empty label")
-		}
-		if strings.Contains(opt.Label, "[[") || strings.Contains(opt.Label, "]]") {
-			t.Errorf("label contains nested brackets, expected clean format: %s", opt.Label)
+		if opt.Name == "" {
+			t.Error("expected non-empty name")
 		}
 	}
 }
@@ -51,17 +48,6 @@ func TestDetectHostname(t *testing.T) {
 	}
 }
 
-func TestGetIPAddrs_ValidInterface(t *testing.T) {
-	interfaces, err := net.Interfaces()
-	if err != nil || len(interfaces) == 0 {
-		t.Skip("No interfaces available for testing")
-	}
-	addrs := GetIPAddrs(interfaces[0])
-	if addrs == nil {
-		t.Error("expected GetIPAddrs to return a slice, got nil")
-	}
-}
-
 func TestDetectHostname_Error(t *testing.T) {
 	oldOsHostname := osHostname
 	defer func() { osHostname = oldOsHostname }()
@@ -79,7 +65,7 @@ func TestDetectHostname_Error(t *testing.T) {
 	}
 }
 
-func TestGetInterfaceOptions_Error(t *testing.T) {
+func TestGetWOLInterfaces_Error(t *testing.T) {
 	oldNetInterfaces := netInterfaces
 	defer func() { netInterfaces = oldNetInterfaces }()
 
@@ -87,7 +73,7 @@ func TestGetInterfaceOptions_Error(t *testing.T) {
 		return nil, errors.New("mock interfaces error")
 	}
 
-	_, err := GetInterfaceOptions()
+	_, err := GetWOLInterfaces()
 	if err == nil {
 		t.Fatal("expected error getting interface options, got nil")
 	}
@@ -96,7 +82,7 @@ func TestGetInterfaceOptions_Error(t *testing.T) {
 	}
 }
 
-func TestGetInterfaceOptions_NoSuitable(t *testing.T) {
+func TestGetWOLInterfaces_NoSuitable(t *testing.T) {
 	oldNetInterfaces := netInterfaces
 	defer func() { netInterfaces = oldNetInterfaces }()
 
@@ -111,7 +97,7 @@ func TestGetInterfaceOptions_NoSuitable(t *testing.T) {
 		}, nil
 	}
 
-	_, err := GetInterfaceOptions()
+	_, err := GetWOLInterfaces()
 	if err == nil {
 		t.Fatal("expected error for no suitable interfaces, got nil")
 	}
@@ -120,7 +106,26 @@ func TestGetInterfaceOptions_NoSuitable(t *testing.T) {
 	}
 }
 
-func TestGetIPAddrs_Error(t *testing.T) {
+func TestGetIPv4Info(t *testing.T) {
+	oldGetAddrs := getAddrs
+	defer func() { getAddrs = oldGetAddrs }()
+
+	getAddrs = func(iface net.Interface) ([]net.Addr, error) {
+		ip, ipnet, _ := net.ParseCIDR("192.168.1.50/24")
+		ipnet.IP = ip
+		return []net.Addr{ipnet}, nil
+	}
+
+	ips, broadcasts := GetIPv4Info(net.Interface{Name: "eth0"})
+	if len(ips) != 1 || ips[0] != "192.168.1.50" {
+		t.Errorf("expected ips to contain 192.168.1.50, got %v", ips)
+	}
+	if broadcasts["192.168.1.50"] != "192.168.1.255" {
+		t.Errorf("expected broadcast to be 192.168.1.255, got %s", broadcasts["192.168.1.50"])
+	}
+}
+
+func TestGetIPv4Info_Error(t *testing.T) {
 	oldGetAddrs := getAddrs
 	defer func() { getAddrs = oldGetAddrs }()
 
@@ -128,8 +133,11 @@ func TestGetIPAddrs_Error(t *testing.T) {
 		return nil, errors.New("mock addrs error")
 	}
 
-	addrs := GetIPAddrs(net.Interface{Name: "eth0"})
-	if addrs != nil {
-		t.Errorf("expected GetIPAddrs to return nil on error, got %v", addrs)
+	ips, broadcasts := GetIPv4Info(net.Interface{Name: "eth0"})
+	if len(ips) != 0 {
+		t.Errorf("expected no ips on error, got %v", ips)
+	}
+	if len(broadcasts) != 0 {
+		t.Errorf("expected no broadcasts on error, got %v", broadcasts)
 	}
 }
