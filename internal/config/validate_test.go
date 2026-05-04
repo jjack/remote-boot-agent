@@ -1,8 +1,37 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
+
+func TestValidateBootloaderConfigPath(t *testing.T) {
+	tempDir := t.TempDir()
+	validPath := filepath.Join(tempDir, "grub.cfg")
+	if err := os.WriteFile(validPath, []byte(""), 0o644); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+
+	tests := []struct {
+		name    string
+		path    string
+		wantErr bool
+	}{
+		{"valid path", validPath, false},
+		{"empty path", "", true},
+		{"not exist", filepath.Join(tempDir, "missing.cfg"), true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateBootloaderConfigPath(tt.path)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateBootloaderConfigPath() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
 
 func TestValidateMACAddress(t *testing.T) {
 	tests := []struct {
@@ -27,13 +56,14 @@ func TestValidateMACAddress(t *testing.T) {
 	}
 }
 
-func TestValidateHostname(t *testing.T) {
+func TestValidateHost(t *testing.T) {
 	tests := []struct {
 		name    string
 		host    string
 		wantErr bool
 	}{
 		{"valid hostname", "my-host.name", false},
+		{"valid ip", "192.168.1.5", false},
 		{"empty hostname", "", true},
 		{"invalid characters", "my_host!name", true},
 		{"spaces", "my host", true},
@@ -59,6 +89,8 @@ func TestValidateURL(t *testing.T) {
 		{"valid https", "https://homeassistant.local", false},
 		{"empty", "", true},
 		{"invalid format", "not-a-url", true},
+		{"missing scheme", "/just/a/path", true},
+		{"missing host", "http:///path", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -108,27 +140,86 @@ func TestValidateEntityType(t *testing.T) {
 	}
 }
 
-func TestConfigValidate(t *testing.T) {
-	cfg := &Config{
-		Server: ServerConfig{
-			MACAddress:       "00:11:22:33:44:55",
-			Name:             "Test Server",
-			Host:             "test-host",
-			BroadcastAddress: "192.168.1.255",
-			BroadcastPort:    9,
-		},
-		HomeAssistant: HomeAssistantConfig{
-			URL:        "http://localhost:8123",
-			WebhookID:  "test_webhook",
-			EntityType: EntityTypeButton,
-		},
+func TestValidateBroadcastAddress(t *testing.T) {
+	tests := []struct {
+		name    string
+		addr    string
+		wantErr bool
+	}{
+		{"valid ip", "192.168.1.255", false},
+		{"empty", "", false},
+		{"invalid ip", "not-an-ip", true},
 	}
-	if err := cfg.Validate(); err != nil {
-		t.Errorf("expected valid config, got %v", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := ValidateBroadcastAddress(tt.addr); (err != nil) != tt.wantErr {
+				t.Errorf("ValidateBroadcastAddress() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateBroadcastPort(t *testing.T) {
+	tests := []struct {
+		name    string
+		port    string
+		wantErr bool
+	}{
+		{"valid port", "9", false},
+		{"empty", "", false},
+		{"too low", "0", true},
+		{"too high", "65536", true},
+		{"not a number", "abc", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := ValidateBroadcastPort(tt.port); (err != nil) != tt.wantErr {
+				t.Errorf("ValidateBroadcastPort() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestConfigValidate(t *testing.T) {
+	validCfg := func() *Config {
+		return &Config{
+			Server: ServerConfig{
+				MACAddress:       "00:11:22:33:44:55",
+				Host:             "test-host",
+				BroadcastAddress: "192.168.1.255",
+				BroadcastPort:    9,
+			},
+			HomeAssistant: HomeAssistantConfig{
+				URL:        "http://localhost:8123",
+				WebhookID:  "test_webhook",
+				EntityType: EntityTypeButton,
+			},
+		}
 	}
 
-	cfg.Server.MACAddress = "invalid"
-	if err := cfg.Validate(); err == nil {
-		t.Error("expected error for invalid config")
+	tests := []struct {
+		name    string
+		modify  func(*Config)
+		wantErr bool
+	}{
+		{"valid config", func(c *Config) {}, false},
+		{"invalid MAC", func(c *Config) { c.Server.MACAddress = "invalid" }, true},
+		{"empty Host", func(c *Config) { c.Server.Host = "" }, true},
+		{"invalid EntityType", func(c *Config) { c.HomeAssistant.EntityType = "invalid" }, true},
+		{"empty URL", func(c *Config) { c.HomeAssistant.URL = "" }, true},
+		{"empty WebhookID", func(c *Config) { c.HomeAssistant.WebhookID = "" }, true},
+		{"invalid BroadcastPort", func(c *Config) { c.Server.BroadcastPort = -1 }, true},
+		{"invalid BroadcastAddress", func(c *Config) { c.Server.BroadcastAddress = "invalid-ip" }, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validCfg()
+			tt.modify(cfg)
+			err := cfg.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
 	}
 }
