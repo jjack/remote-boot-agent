@@ -3,6 +3,7 @@ package homeassistant
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/grandcat/zeroconf"
@@ -33,11 +34,9 @@ func Discover(ctx context.Context) (string, error) {
 				if !ok {
 					return
 				}
-				// Found it! Grab the first IPv4 address
-				if len(entry.AddrIPv4) > 0 {
-					ip := entry.AddrIPv4[0].String()
-					port := entry.Port
-					url := fmt.Sprintf("http://%s:%d", ip, port)
+
+				url := extractURL(entry)
+				if url != "" {
 					found <- url
 					cancel() // Cancel context to stop spinner and discovery early
 					return
@@ -57,4 +56,28 @@ func Discover(ctx context.Context) (string, error) {
 	case <-ctx.Done():
 		return "", nil
 	}
+}
+
+func extractURL(entry *zeroconf.ServiceEntry) string {
+	// Check TXT records for configured URLs first
+	for _, txt := range entry.Text {
+		if strings.HasPrefix(txt, "internal_url=") {
+			if url := strings.TrimPrefix(txt, "internal_url="); url != "" {
+				return url
+			}
+		}
+		if strings.HasPrefix(txt, "base_url=") {
+			if url := strings.TrimPrefix(txt, "base_url="); url != "" {
+				return url
+			}
+		}
+	}
+
+	// Fall back to constructing URL from IP and port if no suitable TXT record is found
+	if len(entry.AddrIPv4) > 0 {
+		ip := entry.AddrIPv4[0].String()
+		port := entry.Port
+		return fmt.Sprintf("http://%s:%d", ip, port)
+	}
+	return ""
 }
