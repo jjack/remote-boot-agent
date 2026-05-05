@@ -94,6 +94,7 @@ func TestClient_Push_HttpClientError(t *testing.T) {
 func TestClient_Push_CreateRequestError(t *testing.T) {
 	client := NewClient("http://homeassistant.local:8123", "test", nil)
 	// Passing a nil context causes http.NewRequestWithContext to reliably return an error
+	//nolint:staticcheck // SA1012: we intentionally pass nil for testing
 	err := client.Push(nil, PushPayload{})
 	if err == nil {
 		t.Fatal("expected error on nil context, got nil")
