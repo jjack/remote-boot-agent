@@ -106,6 +106,45 @@ func TestGetWOLInterfaces_NoSuitable(t *testing.T) {
 	}
 }
 
+func TestIsWOLCapableInterface(t *testing.T) {
+	mac, _ := net.ParseMAC("00:11:22:33:44:55")
+
+	tests := []struct {
+		name     string
+		inf      net.Interface
+		expected bool
+	}{
+		{
+			name:     "no mac",
+			inf:      net.Interface{Flags: net.FlagUp},
+			expected: false,
+		},
+		{
+			name:     "not up",
+			inf:      net.Interface{HardwareAddr: mac, Flags: 0},
+			expected: false,
+		},
+		{
+			name:     "loopback",
+			inf:      net.Interface{HardwareAddr: mac, Flags: net.FlagUp | net.FlagLoopback},
+			expected: false,
+		},
+		{
+			name:     "virtual prefix",
+			inf:      net.Interface{Name: "docker0", HardwareAddr: mac, Flags: net.FlagUp},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isWOLCapableInterface(tt.inf); got != tt.expected {
+				t.Errorf("isWOLCapableInterface() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestGetIPv4Info(t *testing.T) {
 	oldGetAddrs := getAddrs
 	defer func() { getAddrs = oldGetAddrs }()
@@ -139,6 +178,42 @@ func TestGetIPv4Info_Error(t *testing.T) {
 	}
 	if len(broadcasts) != 0 {
 		t.Errorf("expected no broadcasts on error, got %v", broadcasts)
+	}
+}
+
+func TestGetIPv4Info_IPv6(t *testing.T) {
+	oldGetAddrs := getAddrs
+	defer func() { getAddrs = oldGetAddrs }()
+
+	getAddrs = func(iface net.Interface) ([]net.Addr, error) {
+		ip, ipnet, _ := net.ParseCIDR("2001:db8::1/64")
+		ipnet.IP = ip
+		return []net.Addr{ipnet}, nil
+	}
+
+	ips, broadcasts := GetIPv4Info(net.Interface{Name: "eth0"})
+	if len(ips) != 1 || ips[0] != "2001:db8::1" {
+		t.Errorf("expected ips to contain 2001:db8::1, got %v", ips)
+	}
+	if broadcasts["2001:db8::1"] == "" {
+		t.Errorf("expected broadcast to be calculated for IPv6")
+	}
+}
+
+func TestGetIPv4Info_NonIPNet(t *testing.T) {
+	oldGetAddrs := getAddrs
+	defer func() { getAddrs = oldGetAddrs }()
+
+	getAddrs = func(iface net.Interface) ([]net.Addr, error) {
+		return []net.Addr{&net.UnixAddr{Name: "test", Net: "unix"}}, nil
+	}
+
+	ips, broadcasts := GetIPv4Info(net.Interface{Name: "eth0"})
+	if len(ips) != 0 {
+		t.Errorf("expected 0 ips, got %d", len(ips))
+	}
+	if len(broadcasts) != 0 {
+		t.Errorf("expected 0 broadcasts, got %d", len(broadcasts))
 	}
 }
 
