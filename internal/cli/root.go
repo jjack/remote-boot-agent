@@ -46,11 +46,6 @@ func NewCLI() *CLI {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			// Don't load the config if we're also trying to generate it
-			if cmd.CommandPath() == "remote-boot-agent config generate" {
-				return nil
-			}
-
 			cfg, err := config.Load(cfgFile, cmd.Flags())
 			if err != nil {
 				return err

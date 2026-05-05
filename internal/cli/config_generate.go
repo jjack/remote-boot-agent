@@ -363,6 +363,9 @@ func NewConfigGenerateCmd(deps *CommandDeps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "generate",
 		Short: "Interactively generate a config file",
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			return nil // Override root config loading, we are generating it from scratch
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := ensureSupport(cmd.Context(), deps); err != nil {
 				return err
