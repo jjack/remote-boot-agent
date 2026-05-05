@@ -13,8 +13,16 @@ const homeAssistantService = "_home-assistant._tcp"
 
 const discoveryTimeout = 3 * time.Second
 
+type mdnsResolver interface {
+	Browse(ctx context.Context, service string, domain string, entries chan<- *zeroconf.ServiceEntry) error
+}
+
+var newResolver = func() (mdnsResolver, error) {
+	return zeroconf.NewResolver(nil)
+}
+
 func Discover(ctx context.Context) (string, error) {
-	resolver, err := zeroconf.NewResolver(nil)
+	resolver, err := newResolver()
 	if err != nil {
 		return "", err
 	}
