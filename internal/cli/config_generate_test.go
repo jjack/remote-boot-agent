@@ -459,6 +459,8 @@ func TestGenerateConfigSurvey_OptErrors(t *testing.T) {
 }
 
 func TestBuildIfaceOptions(t *testing.T) {
+	t.Parallel()
+
 	resolver := &mockSystemResolver{
 		getIPv4InfoFunc: func(inf net.Interface) ([]string, map[string]string) {
 			return []string{"192.168.1.50"}, nil
@@ -484,6 +486,8 @@ func TestBuildIfaceOptions(t *testing.T) {
 }
 
 func TestBuildHostOptions(t *testing.T) {
+	t.Parallel()
+
 	opts := buildHostOptions("my-host", "my-host.local", []string{"192.168.1.50"})
 
 	if len(opts) != 4 {
@@ -510,6 +514,8 @@ func TestBuildHostOptions(t *testing.T) {
 }
 
 func TestBuildBroadcastOptions(t *testing.T) {
+	t.Parallel()
+
 	ips := []string{"192.168.1.50", "10.0.0.50"}
 	broadcasts := map[string]string{
 		"192.168.1.50": "192.168.1.255",

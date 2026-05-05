@@ -50,6 +50,8 @@ func (m *mockInstallInitSystem) Install(ctx context.Context, configPath string) 
 }
 
 func TestInstallCmd_Success(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{
 		Host: config.HostConfig{
 			MACAddress: "aa:bb:cc:dd:ee:ff",
@@ -108,6 +110,8 @@ func TestInstallCmd_Success(t *testing.T) {
 }
 
 func TestInstallCmd_BootloaderError(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{
 		Bootloader: config.BootloaderConfig{Name: "mock-bl"},
 		InitSystem: config.InitSystemConfig{Name: "mock-init"},
@@ -128,6 +132,8 @@ func TestInstallCmd_BootloaderError(t *testing.T) {
 }
 
 func TestInstallCmd_InitSystemError(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{
 		Bootloader: config.BootloaderConfig{Name: "mock-bl"},
 		InitSystem: config.InitSystemConfig{Name: "mock-init"},
@@ -148,6 +154,8 @@ func TestInstallCmd_InitSystemError(t *testing.T) {
 }
 
 func TestInstallCmd_MissingConfigFlag(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.Config{
 		Bootloader: config.BootloaderConfig{Name: "mock-bl"},
 		InitSystem: config.InitSystemConfig{Name: "mock-init"},

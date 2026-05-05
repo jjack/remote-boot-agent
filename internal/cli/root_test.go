@@ -206,7 +206,11 @@ func TestCLI_PersistentPreRun_ConfigGenerate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = cli.RootCmd.PersistentPreRunE(cmd, []string{})
+	if cmd.PersistentPreRunE == nil {
+		t.Fatal("expected config generate command to override PersistentPreRunE")
+	}
+
+	err = cmd.PersistentPreRunE(cmd, []string{})
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
