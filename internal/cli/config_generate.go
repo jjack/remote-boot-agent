@@ -252,6 +252,9 @@ func defaultRunHAForm(defaultURL string) (haResults, error) {
 }
 
 func generateConfigInteractive(ctx context.Context, deps *CommandDeps) (*config.Config, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	// 1. Fetch async HA Discovery
 	haDiscoveryResultChan := make(chan haDiscoveryResult, 1)
 	go func() {
