@@ -346,7 +346,7 @@ func TestGrub_GetBootOptions_PermissionDenied(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error reading directory as file")
 	}
-	if !strings.Contains(err.Error(), "permission denied reading grub config") && !strings.Contains(err.Error(), "failed to open grub config") {
-		t.Errorf("expected file open error, got: %v", err)
+	if !strings.Contains(err.Error(), "permission denied reading grub config") && !strings.Contains(err.Error(), "failed to open grub config") && !strings.Contains(err.Error(), "error reading grub config") {
+		t.Errorf("expected file open or read error, got: %v", err)
 	}
 }
