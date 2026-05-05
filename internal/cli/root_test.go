@@ -24,6 +24,19 @@ func TestNewCLI(t *testing.T) {
 	}
 }
 
+type mockRootBootloader struct{}
+
+func (m *mockRootBootloader) Name() string                      { return "example" }
+func (m *mockRootBootloader) IsActive(ctx context.Context) bool { return true }
+func (m *mockRootBootloader) GetBootOptions(ctx context.Context, cfg bootloader.Config) ([]string, error) {
+	return nil, nil
+}
+
+func (m *mockRootBootloader) Install(ctx context.Context, macAddress, haURL, webhookID string) error {
+	return nil
+}
+func (m *mockRootBootloader) DiscoverConfigPath(ctx context.Context) (string, error) { return "", nil }
+
 func TestResolveBootloader(t *testing.T) {
 	cfg := &config.Config{
 		Bootloader: config.BootloaderConfig{
@@ -32,7 +45,7 @@ func TestResolveBootloader(t *testing.T) {
 	}
 
 	registry := bootloader.NewRegistry()
-	registry.Register("example", bootloader.NewExample)
+	registry.Register("example", func() bootloader.Bootloader { return &mockRootBootloader{} })
 
 	bl, err := ResolveBootloader(context.Background(), cfg.Bootloader.Name, registry)
 	if err != nil {

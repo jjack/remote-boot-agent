@@ -5,9 +5,24 @@ import (
 	"testing"
 )
 
+type mockBootloader struct{}
+
+func (m *mockBootloader) IsActive(ctx context.Context) bool { return true }
+func (m *mockBootloader) GetBootOptions(ctx context.Context, cfg Config) ([]string, error) {
+	return []string{"Ubuntu", "Windows"}, nil
+}
+func (m *mockBootloader) Name() string { return "example" }
+func (m *mockBootloader) Install(ctx context.Context, macAddress, haURL, webhookID string) error {
+	return nil
+}
+
+func (m *mockBootloader) DiscoverConfigPath(ctx context.Context) (string, error) {
+	return "/path/to/example.cfg", nil
+}
+
 func TestBootloaderRegistry(t *testing.T) {
 	registry := NewRegistry()
-	registry.Register("example", NewExample)
+	registry.Register("example", func() Bootloader { return &mockBootloader{} })
 
 	bl := registry.Get("example")
 	if bl == nil {
@@ -38,8 +53,8 @@ func TestDetectBootloader_Fail(t *testing.T) {
 	}
 }
 
-func TestExampleBootloader(t *testing.T) {
-	bl := NewExample()
+func TestMockBootloader(t *testing.T) {
+	bl := &mockBootloader{}
 
 	if !bl.IsActive(context.Background()) {
 		t.Error("expected example bootloader to be active")
@@ -57,7 +72,7 @@ func TestExampleBootloader(t *testing.T) {
 
 func TestDetectBootloader(t *testing.T) {
 	registry := NewRegistry()
-	registry.Register("example", NewExample)
+	registry.Register("example", func() Bootloader { return &mockBootloader{} })
 
 	// 'example' always returns true for IsActive()
 	bl, err := registry.Detect(context.Background())
