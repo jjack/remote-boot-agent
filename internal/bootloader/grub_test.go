@@ -269,3 +269,84 @@ func TestGrubBootloader_RealConfig(t *testing.T) {
 		}
 	}
 }
+
+func TestCountStructuralBraces(t *testing.T) {
+	tests := []struct {
+		name   string
+		line   string
+		opens  int
+		closes int
+	}{
+		{"simple menuentry", "menuentry 'Linux' {", 1, 0},
+		{"closing brace", "}", 0, 1},
+		{"comment", "# this is a comment { }", 0, 0},
+		{"double quotes", "menuentry \"with a brace { inside\" {", 1, 0},
+		{"single quotes", "menuentry 'with a brace { inside' {", 1, 0},
+		{"escaped braces", "escaped \\{ \\} {", 1, 0},
+		{"nested braces", "nested { { } }", 2, 2},
+		{"hash inside quotes", "echo 'hash # inside quotes' {", 1, 0},
+		{"quote inside quote", "echo \"it's nice\" {", 1, 0},
+		{"escaped quote", "echo 'it\\'s nice' {", 1, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			opens, closes := countStructuralBraces(tt.line)
+			if opens != tt.opens || closes != tt.closes {
+				t.Errorf("countStructuralBraces(%q) = %d, %d; want %d, %d", tt.line, opens, closes, tt.opens, tt.closes)
+			}
+		})
+	}
+}
+
+func TestGrub_IsActive_And_Discover(t *testing.T) {
+	bl := NewGrub()
+
+	tempDir := t.TempDir()
+	fakeGrubPath := filepath.Join(tempDir, "grub.cfg")
+	if err := os.WriteFile(fakeGrubPath, []byte(""), 0o644); err != nil {
+		t.Fatalf("failed to write temp grub config: %v", err)
+	}
+
+	originalPaths := grubPaths
+	defer func() { grubPaths = originalPaths }()
+
+	// Test success cases
+	grubPaths = []string{fakeGrubPath}
+
+	if !bl.IsActive(context.Background()) {
+		t.Error("expected IsActive to be true when config exists")
+	}
+
+	path, err := bl.DiscoverConfigPath(context.Background())
+	if err != nil {
+		t.Errorf("expected no error from DiscoverConfigPath, got %v", err)
+	}
+	if path != fakeGrubPath {
+		t.Errorf("expected discovered path %s, got %s", fakeGrubPath, path)
+	}
+
+	// Test failure cases
+	grubPaths = []string{filepath.Join(tempDir, "does-not-exist.cfg")}
+	if bl.IsActive(context.Background()) {
+		t.Error("expected IsActive to be false when config does not exist")
+	}
+	_, err = bl.DiscoverConfigPath(context.Background())
+	if !errors.Is(err, ErrGrubConfigNotFound) {
+		t.Errorf("expected ErrGrubConfigNotFound, got %v", err)
+	}
+}
+
+func TestGrub_GetBootOptions_PermissionDenied(t *testing.T) {
+	bl := NewGrub()
+
+	// A directory is guaranteed to fail opening as a file without root concerns
+	// affecting the strict permissions check as much as a 0000 file might on some CI runners.
+	_, err := bl.GetBootOptions(context.Background(), Config{ConfigPath: t.TempDir()})
+	if err == nil {
+		t.Fatal("expected error reading directory as file")
+	}
+	if !strings.Contains(err.Error(), "permission denied reading grub config") && !strings.Contains(err.Error(), "failed to open grub config") {
+		t.Errorf("expected file open error, got: %v", err)
+	}
+}

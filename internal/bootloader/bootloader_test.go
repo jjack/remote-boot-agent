@@ -53,6 +53,20 @@ func TestDetectBootloader_Fail(t *testing.T) {
 	}
 }
 
+func TestSupportedBootloaders(t *testing.T) {
+	registry := NewRegistry()
+	registry.Register("zebra", func() Bootloader { return &mockBootloader{} })
+	registry.Register("alpha", func() Bootloader { return &mockBootloader{} })
+
+	supported := registry.SupportedBootloaders()
+	if len(supported) != 2 {
+		t.Fatalf("expected 2 supported bootloaders, got %d", len(supported))
+	}
+	if supported[0] != "alpha" || supported[1] != "zebra" {
+		t.Errorf("expected [alpha, zebra] in sorted order, got %v", supported)
+	}
+}
+
 func TestMockBootloader(t *testing.T) {
 	bl := &mockBootloader{}
 
