@@ -52,13 +52,63 @@ func (m *mockInactiveBootloader) DiscoverConfigPath(ctx context.Context) (string
 	return "", nil
 }
 
+type mockSystemResolver struct {
+	discoverHomeAssistantFunc func(ctx context.Context) (string, error)
+	detectSystemHostnameFunc  func() (string, error)
+	getWOLInterfacesFunc      func() ([]net.Interface, error)
+	getIPv4InfoFunc           func(inf net.Interface) ([]string, map[string]string)
+	getFQDNFunc               func(hostname string) string
+	saveConfigFunc            func(cfg *config.Config, path string) error
+}
+
+func (m *mockSystemResolver) DiscoverHomeAssistant(ctx context.Context) (string, error) {
+	if m.discoverHomeAssistantFunc != nil {
+		return m.discoverHomeAssistantFunc(ctx)
+	}
+	return "http://hass.local:8123", nil
+}
+
+func (m *mockSystemResolver) DetectSystemHostname() (string, error) {
+	if m.detectSystemHostnameFunc != nil {
+		return m.detectSystemHostnameFunc()
+	}
+	return "detected-host", nil
+}
+
+func (m *mockSystemResolver) GetWOLInterfaces() ([]net.Interface, error) {
+	if m.getWOLInterfacesFunc != nil {
+		return m.getWOLInterfacesFunc()
+	}
+	mac, _ := net.ParseMAC("00:11:22:33:44:55")
+	return []net.Interface{{Name: "eth0", HardwareAddr: mac}}, nil
+}
+
+func (m *mockSystemResolver) GetIPv4Info(inf net.Interface) ([]string, map[string]string) {
+	if m.getIPv4InfoFunc != nil {
+		return m.getIPv4InfoFunc(inf)
+	}
+	return []string{"192.168.1.100"}, map[string]string{"192.168.1.100": "192.168.1.255"}
+}
+
+func (m *mockSystemResolver) GetFQDN(hostname string) string {
+	if m.getFQDNFunc != nil {
+		return m.getFQDNFunc(hostname)
+	}
+	return "detected-host.local"
+}
+
+func (m *mockSystemResolver) SaveConfig(cfg *config.Config, path string) error {
+	if m.saveConfigFunc != nil {
+		return m.saveConfigFunc(cfg, path)
+	}
+	return nil
+}
+
 func TestGenerateConfigCmd_Execute(t *testing.T) {
 	oldRunForm := runGenerateSurvey
-	oldSave := saveConfigFile
 
 	defer func() {
 		runGenerateSurvey = oldRunForm
-		saveConfigFile = oldSave
 	}()
 
 	tests := []struct {
@@ -74,7 +124,7 @@ func TestGenerateConfigCmd_Execute(t *testing.T) {
 				runGenerateSurvey = func(ctx context.Context, deps *CommandDeps) (*config.Config, error) {
 					return &config.Config{}, nil
 				}
-				saveConfigFile = func(cfg *config.Config, path string) error { return nil }
+				deps.SystemResolver = &mockSystemResolver{saveConfigFunc: func(cfg *config.Config, path string) error { return nil }}
 			},
 			wantErr: false,
 		},
@@ -92,7 +142,7 @@ func TestGenerateConfigCmd_Execute(t *testing.T) {
 						},
 					}, nil
 				}
-				saveConfigFile = func(cfg *config.Config, path string) error { return nil }
+				deps.SystemResolver = &mockSystemResolver{saveConfigFunc: func(cfg *config.Config, path string) error { return nil }}
 			},
 			wantErr:        false,
 			outputContains: "broadcast_address: 1.2.3.4",
@@ -153,7 +203,7 @@ func TestGenerateConfigCmd_Execute(t *testing.T) {
 				runGenerateSurvey = func(ctx context.Context, deps *CommandDeps) (*config.Config, error) {
 					return &config.Config{}, nil
 				}
-				saveConfigFile = func(cfg *config.Config, path string) error { return nil }
+				deps.SystemResolver = &mockSystemResolver{saveConfigFunc: func(cfg *config.Config, path string) error { return nil }}
 
 				blReg := bootloader.NewRegistry()
 				blReg.Register("discover-fail", func() bootloader.Bootloader { return &mockDiscoverFailBootloader{} })
@@ -165,7 +215,9 @@ func TestGenerateConfigCmd_Execute(t *testing.T) {
 			name: "Save Config Error",
 			setupMocks: func(deps *CommandDeps) {
 				runGenerateSurvey = func(ctx context.Context, deps *CommandDeps) (*config.Config, error) { return &config.Config{}, nil }
-				saveConfigFile = func(cfg *config.Config, path string) error { return errors.New("save fail") }
+				deps.SystemResolver = &mockSystemResolver{
+					saveConfigFunc: func(cfg *config.Config, path string) error { return errors.New("save fail") },
+				}
 			},
 			wantErr:     true,
 			errContains: "save fail",
@@ -179,7 +231,7 @@ func TestGenerateConfigCmd_Execute(t *testing.T) {
 			initReg := initsystem.NewRegistry()
 			initReg.Register("mock", func() initsystem.InitSystem { return &mockGenInitSystem{active: true} })
 
-			deps := &CommandDeps{BootloaderRegistry: blReg, InitRegistry: initReg}
+			deps := &CommandDeps{BootloaderRegistry: blReg, InitRegistry: initReg, SystemResolver: &mockSystemResolver{}}
 			tt.setupMocks(deps)
 			cmd := NewConfigGenerateCmd(deps)
 			cmd.SetArgs([]string{}) // prevent picking up real os.Args
@@ -231,7 +283,7 @@ func setupSurveyDeps() *CommandDeps {
 	initReg := initsystem.NewRegistry()
 	initReg.Register("systemd", func() initsystem.InitSystem { return &mockSurveyInitSystem{} })
 
-	return &CommandDeps{BootloaderRegistry: blReg, InitRegistry: initReg}
+	return &CommandDeps{BootloaderRegistry: blReg, InitRegistry: initReg, SystemResolver: &mockSystemResolver{}}
 }
 
 func TestGenerateConfigSurvey_Success(t *testing.T) {
@@ -240,22 +292,12 @@ func TestGenerateConfigSurvey_Success(t *testing.T) {
 	oldRunBootloaderForm := runBootloaderForm
 	oldRunInitSystemForm := runInitSystemForm
 	oldRunHAForm := runHAForm
-	oldDiscoverHomeAssistant := discoverHomeAssistant
-	oldDetectSystemHostname := detectSystemHostname
-	oldGetWOLInterfaces := getWOLInterfaces
-	oldGetIPv4Info := getIPv4Info
-	oldGetFQDN := getFQDN
 	defer func() {
 		runHostInfoForm = oldRunHostInfoForm
 		runWOLForm = oldRunWOLForm
 		runBootloaderForm = oldRunBootloaderForm
 		runInitSystemForm = oldRunInitSystemForm
 		runHAForm = oldRunHAForm
-		discoverHomeAssistant = oldDiscoverHomeAssistant
-		detectSystemHostname = oldDetectSystemHostname
-		getWOLInterfaces = oldGetWOLInterfaces
-		getIPv4Info = oldGetIPv4Info
-		getFQDN = oldGetFQDN
 	}()
 
 	runInitSystemForm = func(io []string) (initSystemResults, error) {
@@ -264,7 +306,7 @@ func TestGenerateConfigSurvey_Success(t *testing.T) {
 	runBootloaderForm = func(bo []string, d *CommandDeps, c context.Context) (bootloaderResults, error) {
 		return bootloaderResults{Name: "grub", ConfigPath: "/boot/grub/grub.cfg"}, nil
 	}
-	runHostInfoForm = func(io []huh.Option[string], im map[string]net.Interface, h string) (hostInfoResults, []huh.Option[string], error) {
+	runHostInfoForm = func(resolver SystemResolver, io []huh.Option[string], im map[string]net.Interface, h string) (hostInfoResults, []huh.Option[string], error) {
 		bOpts := []huh.Option[string]{huh.NewOption("Subnet", "192.168.1.255")}
 		return hostInfoResults{Name: "test-name", IfaceName: "eth0", MACAddress: "00:11:22:33:44:55", HostAddress: "192.168.1.100"}, bOpts, nil
 	}
@@ -275,19 +317,13 @@ func TestGenerateConfigSurvey_Success(t *testing.T) {
 		return haResults{URL: "http://hass.local:8123", WebhookID: "webhook123"}, nil
 	}
 
-	discoverHomeAssistant = func(ctx context.Context) (string, error) { return "http://hass.local:8123", nil }
-	detectSystemHostname = func() (string, error) { return "detected-host", nil }
-
-	getWOLInterfaces = func() ([]net.Interface, error) {
-		mac, _ := net.ParseMAC("00:11:22:33:44:55")
-		return []net.Interface{{Name: "eth0", HardwareAddr: mac}}, nil
-	}
-	getFQDN = func(hostname string) string { return "detected-host.local" }
-	getIPv4Info = func(inf net.Interface) ([]string, map[string]string) {
-		return []string{"192.168.1.100", "10.0.0.100"}, map[string]string{"192.168.1.100": "192.168.1.255", "10.0.0.100": "10.0.0.255"}
-	}
-
 	deps := setupSurveyDeps()
+	deps.SystemResolver = &mockSystemResolver{
+		getIPv4InfoFunc: func(inf net.Interface) ([]string, map[string]string) {
+			return []string{"192.168.1.100", "10.0.0.100"}, map[string]string{"192.168.1.100": "192.168.1.255", "10.0.0.100": "10.0.0.255"}
+		},
+	}
+
 	cfg, err := generateConfigInteractive(context.Background(), deps)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -316,35 +352,13 @@ func TestGenerateConfigSurvey_FormErrors(t *testing.T) {
 	oldRunBootloaderForm := runBootloaderForm
 	oldRunInitSystemForm := runInitSystemForm
 	oldRunHAForm := runHAForm
-	oldDiscoverHomeAssistant := discoverHomeAssistant
-	oldDetectSystemHostname := detectSystemHostname
-	oldGetWOLInterfaces := getWOLInterfaces
-	oldGetIPv4Info := getIPv4Info
-	oldGetFQDN := getFQDN
 	defer func() {
 		runHostInfoForm = oldRunHostInfoForm
 		runWOLForm = oldRunWOLForm
 		runBootloaderForm = oldRunBootloaderForm
 		runInitSystemForm = oldRunInitSystemForm
 		runHAForm = oldRunHAForm
-		discoverHomeAssistant = oldDiscoverHomeAssistant
-		detectSystemHostname = oldDetectSystemHostname
-		getWOLInterfaces = oldGetWOLInterfaces
-		getIPv4Info = oldGetIPv4Info
-		getFQDN = oldGetFQDN
 	}()
-
-	discoverHomeAssistant = func(ctx context.Context) (string, error) { return "http://hass.local:8123", nil }
-	detectSystemHostname = func() (string, error) { return "detected-host", nil }
-
-	getWOLInterfaces = func() ([]net.Interface, error) {
-		mac, _ := net.ParseMAC("00:11:22:33:44:55")
-		return []net.Interface{{Name: "eth0", HardwareAddr: mac}}, nil
-	}
-	getIPv4Info = func(inf net.Interface) ([]string, map[string]string) {
-		return []string{"192.168.1.100"}, map[string]string{"192.168.1.100": "192.168.1.255"}
-	}
-	getFQDN = func(hostname string) string { return "detected-host.local" }
 
 	deps := setupSurveyDeps()
 
@@ -353,7 +367,7 @@ func TestGenerateConfigSurvey_FormErrors(t *testing.T) {
 		runBootloaderForm = func(bo []string, d *CommandDeps, c context.Context) (bootloaderResults, error) {
 			return bootloaderResults{Name: "grub", ConfigPath: "/boot/grub/grub.cfg"}, nil
 		}
-		runHostInfoForm = func(io []huh.Option[string], im map[string]net.Interface, h string) (hostInfoResults, []huh.Option[string], error) {
+		runHostInfoForm = func(resolver SystemResolver, io []huh.Option[string], im map[string]net.Interface, h string) (hostInfoResults, []huh.Option[string], error) {
 			return hostInfoResults{Name: "test-name", IfaceName: "eth0", MACAddress: "00:11:22:33:44:55", HostAddress: "192.168.1.100"}, []huh.Option[string]{huh.NewOption("test", "test")}, nil
 		}
 		runWOLForm = func(bo []huh.Option[string]) (wolResults, error) {
@@ -388,7 +402,7 @@ func TestGenerateConfigSurvey_FormErrors(t *testing.T) {
 	})
 
 	t.Run("Host Info Form Error", func(t *testing.T) {
-		runHostInfoForm = func(io []huh.Option[string], im map[string]net.Interface, h string) (hostInfoResults, []huh.Option[string], error) {
+		runHostInfoForm = func(resolver SystemResolver, io []huh.Option[string], im map[string]net.Interface, h string) (hostInfoResults, []huh.Option[string], error) {
 			return hostInfoResults{}, nil, errors.New("simulated host info error")
 		}
 		_, err := generateConfigInteractive(context.Background(), deps)
@@ -422,24 +436,21 @@ func TestGenerateConfigSurvey_FormErrors(t *testing.T) {
 func TestGenerateConfigSurvey_OptErrors(t *testing.T) {
 	t.Run("Invalid MAC Address", func(t *testing.T) {
 		oldRunHostInfoForm := runHostInfoForm
-		oldDetectSystemHostname := detectSystemHostname
-		oldGetWOLInterfaces := getWOLInterfaces
 
-		runHostInfoForm = func(io []huh.Option[string], im map[string]net.Interface, h string) (hostInfoResults, []huh.Option[string], error) {
+		runHostInfoForm = func(resolver SystemResolver, io []huh.Option[string], im map[string]net.Interface, h string) (hostInfoResults, []huh.Option[string], error) {
 			return hostInfoResults{Name: "test", IfaceName: "eth0", MACAddress: "", HostAddress: "192.168.1.100"}, []huh.Option[string]{}, nil
 		}
 		defer func() {
 			runHostInfoForm = oldRunHostInfoForm
-			detectSystemHostname = oldDetectSystemHostname
-			getWOLInterfaces = oldGetWOLInterfaces
 		}()
 
-		detectSystemHostname = func() (string, error) { return "host", nil }
-		getWOLInterfaces = func() ([]net.Interface, error) {
-			return []net.Interface{{Name: "eth0", HardwareAddr: nil}}, nil
+		deps := setupSurveyDeps()
+		deps.SystemResolver = &mockSystemResolver{
+			getWOLInterfacesFunc: func() ([]net.Interface, error) {
+				return []net.Interface{{Name: "eth0", HardwareAddr: nil}}, nil
+			},
 		}
 
-		deps := setupSurveyDeps()
 		_, err := generateConfigInteractive(context.Background(), deps)
 		if err == nil {
 			t.Errorf("expected mac validation error, got nil")
@@ -448,18 +459,17 @@ func TestGenerateConfigSurvey_OptErrors(t *testing.T) {
 }
 
 func TestBuildIfaceOptions(t *testing.T) {
-	oldGetIPv4Info := getIPv4Info
-	defer func() { getIPv4Info = oldGetIPv4Info }()
-	getIPv4Info = func(inf net.Interface) ([]string, map[string]string) {
-		return []string{"192.168.1.50"}, nil
+	resolver := &mockSystemResolver{
+		getIPv4InfoFunc: func(inf net.Interface) ([]string, map[string]string) {
+			return []string{"192.168.1.50"}, nil
+		},
 	}
-
 	mac, _ := net.ParseMAC("00:11:22:33:44:55")
 	ifaces := []net.Interface{
 		{Name: "eth0", HardwareAddr: mac},
 	}
 
-	opts, m := buildIfaceOptions(ifaces)
+	opts, m := buildIfaceOptions(resolver, ifaces)
 	if len(opts) != 1 {
 		t.Fatalf("expected 1 option, got %d", len(opts))
 	}
@@ -553,45 +563,35 @@ func TestGenerateConfigSurvey_ContextCancelBeforeHA(t *testing.T) {
 	oldRunBootloaderForm := runBootloaderForm
 	oldRunInitSystemForm := runInitSystemForm
 	oldRunHAForm := runHAForm
-	oldDiscoverHomeAssistant := discoverHomeAssistant
-	oldDetectSystemHostname := detectSystemHostname
-	oldGetWOLInterfaces := getWOLInterfaces
-	oldGetIPv4Info := getIPv4Info
-	oldGetFQDN := getFQDN
 	defer func() {
 		runHostInfoForm = oldRunHostInfoForm
 		runWOLForm = oldRunWOLForm
 		runBootloaderForm = oldRunBootloaderForm
 		runInitSystemForm = oldRunInitSystemForm
 		runHAForm = oldRunHAForm
-		discoverHomeAssistant = oldDiscoverHomeAssistant
-		detectSystemHostname = oldDetectSystemHostname
-		getWOLInterfaces = oldGetWOLInterfaces
-		getIPv4Info = oldGetIPv4Info
-		getFQDN = oldGetFQDN
 	}()
 
 	ctx, cancel := context.WithCancel(context.Background())
-
-	discoverHomeAssistant = func(c context.Context) (string, error) { <-c.Done(); return "", c.Err() }
-	detectSystemHostname = func() (string, error) { return "host", nil }
-	getWOLInterfaces = func() ([]net.Interface, error) {
-		return []net.Interface{{Name: "eth0", HardwareAddr: net.HardwareAddr{1, 2, 3, 4, 5, 6}}}, nil
-	}
-	getIPv4Info = func(net.Interface) ([]string, map[string]string) { return nil, nil }
-	getFQDN = func(h string) string { return h }
 
 	runInitSystemForm = func(io []string) (initSystemResults, error) { return initSystemResults{}, nil }
 	runBootloaderForm = func(bo []string, d *CommandDeps, c context.Context) (bootloaderResults, error) {
 		return bootloaderResults{}, nil
 	}
-	runHostInfoForm = func(io []huh.Option[string], im map[string]net.Interface, h string) (hostInfoResults, []huh.Option[string], error) {
+	runHostInfoForm = func(resolver SystemResolver, io []huh.Option[string], im map[string]net.Interface, h string) (hostInfoResults, []huh.Option[string], error) {
 		return hostInfoResults{MACAddress: "00:11:22:33:44:55"}, nil, nil
 	}
 	runWOLForm = func(bo []huh.Option[string]) (wolResults, error) { cancel(); return wolResults{WOLPort: "9"}, nil }
 	runHAForm = func(u string) (haResults, error) { return haResults{}, nil }
 
 	deps := setupSurveyDeps()
+	deps.SystemResolver = &mockSystemResolver{
+		discoverHomeAssistantFunc: func(c context.Context) (string, error) { <-c.Done(); return "", c.Err() },
+		getWOLInterfacesFunc: func() ([]net.Interface, error) {
+			return []net.Interface{{Name: "eth0", HardwareAddr: net.HardwareAddr{1, 2, 3, 4, 5, 6}}}, nil
+		},
+		getIPv4InfoFunc: func(net.Interface) ([]string, map[string]string) { return nil, nil },
+		getFQDNFunc:     func(h string) string { return h },
+	}
 	if _, err := generateConfigInteractive(ctx, deps); !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context canceled, got %v", err)
 	}

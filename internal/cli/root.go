@@ -3,10 +3,13 @@ package cli
 import (
 	"context"
 	"fmt"
+	"net"
 
 	"github.com/jjack/remote-boot-agent/internal/bootloader"
 	"github.com/jjack/remote-boot-agent/internal/config"
+	"github.com/jjack/remote-boot-agent/internal/homeassistant"
 	"github.com/jjack/remote-boot-agent/internal/initsystem"
+	"github.com/jjack/remote-boot-agent/internal/system"
 	"github.com/spf13/cobra"
 )
 
@@ -15,10 +18,42 @@ type CLI struct {
 	RootCmd *cobra.Command
 }
 
+type SystemResolver interface {
+	DiscoverHomeAssistant(ctx context.Context) (string, error)
+	DetectSystemHostname() (string, error)
+	GetWOLInterfaces() ([]net.Interface, error)
+	GetIPv4Info(inf net.Interface) ([]string, map[string]string)
+	GetFQDN(hostname string) string
+	SaveConfig(cfg *config.Config, path string) error
+}
+
+type DefaultSystemResolver struct{}
+
+func (d *DefaultSystemResolver) DiscoverHomeAssistant(ctx context.Context) (string, error) {
+	return homeassistant.Discover(ctx)
+}
+
+func (d *DefaultSystemResolver) DetectSystemHostname() (string, error) {
+	return system.DetectHostname()
+}
+
+func (d *DefaultSystemResolver) GetWOLInterfaces() ([]net.Interface, error) {
+	return system.GetWOLInterfaces()
+}
+
+func (d *DefaultSystemResolver) GetIPv4Info(inf net.Interface) ([]string, map[string]string) {
+	return system.GetIPv4Info(inf)
+}
+func (d *DefaultSystemResolver) GetFQDN(hostname string) string { return system.GetFQDN(hostname) }
+func (d *DefaultSystemResolver) SaveConfig(cfg *config.Config, path string) error {
+	return config.Save(cfg, path)
+}
+
 type CommandDeps struct {
 	Config             *config.Config
 	BootloaderRegistry *bootloader.Registry
 	InitRegistry       *initsystem.Registry
+	SystemResolver     SystemResolver
 }
 
 func (d *CommandDeps) Bootloader(ctx context.Context) (bootloader.Bootloader, error) {
@@ -36,6 +71,7 @@ func NewCLI() *CLI {
 		Config:             &config.Config{},
 		BootloaderRegistry: bootloader.NewRegistry(),
 		InitRegistry:       initsystem.NewRegistry(),
+		SystemResolver:     &DefaultSystemResolver{},
 	}
 
 	var cfgFile string

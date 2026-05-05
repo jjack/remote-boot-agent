@@ -11,20 +11,12 @@ import (
 	"charm.land/huh/v2"
 	"github.com/jjack/remote-boot-agent/internal/bootloader"
 	"github.com/jjack/remote-boot-agent/internal/config"
-	"github.com/jjack/remote-boot-agent/internal/homeassistant"
 	"github.com/jjack/remote-boot-agent/internal/initsystem"
-	"github.com/jjack/remote-boot-agent/internal/system"
 	"github.com/spf13/cobra"
 )
 
 var (
-	discoverHomeAssistant = homeassistant.Discover
-	detectSystemHostname  = system.DetectHostname
-	getWOLInterfaces      = system.GetWOLInterfaces
-	getIPv4Info           = system.GetIPv4Info
-	getFQDN               = system.GetFQDN
-	saveConfigFile        = config.Save
-	runGenerateSurvey     = generateConfigInteractive
+	runGenerateSurvey = generateConfigInteractive
 
 	runHostInfoForm   = defaultRunHostInfoForm
 	runWOLForm        = defaultRunWOLForm
@@ -42,12 +34,12 @@ type haDiscoveryResult struct {
 	err error
 }
 
-func buildIfaceOptions(wolInterfaces []net.Interface) ([]huh.Option[string], map[string]net.Interface) {
+func buildIfaceOptions(resolver SystemResolver, wolInterfaces []net.Interface) ([]huh.Option[string], map[string]net.Interface) {
 	var ifaceOpts []huh.Option[string]
 	ifaceMap := make(map[string]net.Interface)
 	for _, inf := range wolInterfaces {
 		ifaceMap[inf.Name] = inf
-		ips, _ := getIPv4Info(inf)
+		ips, _ := resolver.GetIPv4Info(inf)
 		desc := fmt.Sprintf("(%s) [%s]", inf.HardwareAddr.String(), strings.Join(ips, ", "))
 		ifaceOpts = append(ifaceOpts, huh.NewOption(fmt.Sprintf("%s %s", inf.Name, desc), inf.Name))
 	}
@@ -143,7 +135,7 @@ type hostInfoResults struct {
 	MACAddress  string
 }
 
-func defaultRunHostInfoForm(ifaceOpts []huh.Option[string], ifaceMap map[string]net.Interface, hostname string) (hostInfoResults, []huh.Option[string], error) {
+func defaultRunHostInfoForm(resolver SystemResolver, ifaceOpts []huh.Option[string], ifaceMap map[string]net.Interface, hostname string) (hostInfoResults, []huh.Option[string], error) {
 	res := hostInfoResults{
 		Name: hostname,
 	}
@@ -159,9 +151,9 @@ func defaultRunHostInfoForm(ifaceOpts []huh.Option[string], ifaceMap map[string]
 	selectedIface := ifaceMap[res.IfaceName]
 	res.MACAddress = selectedIface.HardwareAddr.String()
 
-	ips, ipBroadcasts := getIPv4Info(selectedIface)
+	ips, ipBroadcasts := resolver.GetIPv4Info(selectedIface)
 
-	fqdn := getFQDN(hostname)
+	fqdn := resolver.GetFQDN(hostname)
 	hostOpts := buildHostOptions(hostname, fqdn, ips)
 
 	var customHost string
@@ -258,22 +250,22 @@ func generateConfigInteractive(ctx context.Context, deps *CommandDeps) (*config.
 	// 1. Fetch async HA Discovery
 	haDiscoveryResultChan := make(chan haDiscoveryResult, 1)
 	go func() {
-		url, err := discoverHomeAssistant(ctx)
+		url, err := deps.SystemResolver.DiscoverHomeAssistant(ctx)
 		haDiscoveryResultChan <- haDiscoveryResult{url: url, err: err}
 	}()
 
 	// 2. Fetch basic system info
-	hostname, err := detectSystemHostname()
+	hostname, err := deps.SystemResolver.DetectSystemHostname()
 	if err != nil {
 		return nil, err
 	}
 
-	wolInterfaces, err := getWOLInterfaces()
+	wolInterfaces, err := deps.SystemResolver.GetWOLInterfaces()
 	if err != nil {
 		return nil, err
 	}
 
-	ifaceOpts, ifaceMap := buildIfaceOptions(wolInterfaces)
+	ifaceOpts, ifaceMap := buildIfaceOptions(deps.SystemResolver, wolInterfaces)
 
 	blOpts := deps.BootloaderRegistry.SupportedBootloaders()
 	initOpts := deps.InitRegistry.SupportedInitSystems()
@@ -288,7 +280,7 @@ func generateConfigInteractive(ctx context.Context, deps *CommandDeps) (*config.
 		return nil, err
 	}
 
-	hostRes, broadcastOpts, err := runHostInfoForm(ifaceOpts, ifaceMap, hostname)
+	hostRes, broadcastOpts, err := runHostInfoForm(deps.SystemResolver, ifaceOpts, ifaceMap, hostname)
 	if err != nil {
 		return nil, err
 	}
@@ -408,7 +400,7 @@ func NewConfigGenerateCmd(deps *CommandDeps) *cobra.Command {
 			cmd.Printf("bootloader:\n  name: %s\n  config_path: %s\n\n", cfg.Bootloader.Name, cfg.Bootloader.ConfigPath)
 			cmd.Printf("initsystem:\n  name: %s\n", cfg.InitSystem.Name)
 
-			return saveConfigFile(cfg, cfgPath)
+			return deps.SystemResolver.SaveConfig(cfg, cfgPath)
 		},
 	}
 
