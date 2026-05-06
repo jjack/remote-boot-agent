@@ -146,6 +146,58 @@ func TestPushBootOptionsCommand_DefaultWOL(t *testing.T) {
 	}
 }
 
+func TestPushBootOptionsCommand_ZeroWOL(t *testing.T) {
+	var payload ha.PushPayload
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("failed to read body: %v", err)
+		}
+		if err := json.Unmarshal(body, &payload); err != nil {
+			t.Fatalf("failed to parse json: %v", err)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	tempGrubPath := createTempGrubConfig(t)
+	cfg := &config.Config{
+		Host: config.HostConfig{
+			MACAddress:       "aa:bb:cc:dd:ee:ff",
+			BroadcastAddress: "", // Zero value instead of default
+			BroadcastPort:    0,  // Zero value instead of default
+			Name:             "test-name",
+			Address:          "10.0.0.1",
+		},
+		Bootloader: config.BootloaderConfig{
+			Name:       "grub",
+			ConfigPath: tempGrubPath,
+		},
+		HomeAssistant: config.HomeAssistantConfig{
+			URL:       ts.URL,
+			WebhookID: "test-webhook",
+		},
+	}
+
+	registry := bootloader.NewRegistry()
+	registry.Register("grub", bootloader.NewGrub)
+
+	deps := &CommandDeps{Config: cfg, BootloaderRegistry: registry}
+	cmd := NewPushCmd(deps)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Ensure the empty/zero values are handled correctly so they get stripped via omitempty in the JSON
+	if payload.BroadcastAddress != "" {
+		t.Errorf("expected broadcast address to be omitted (empty string), got %s", payload.BroadcastAddress)
+	}
+	if payload.BroadcastPort != 0 {
+		t.Errorf("expected WOL port to be omitted (0), got %d", payload.BroadcastPort)
+	}
+}
+
 type mockPushBootloaderErr struct{}
 
 func (m *mockPushBootloaderErr) Name() string                      { return "err" }

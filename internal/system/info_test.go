@@ -9,13 +9,25 @@ import (
 )
 
 func TestGetWOLInterfaces(t *testing.T) {
+	oldNetInterfaces := netInterfaces
+	oldOsStat := osStat
+	defer func() {
+		netInterfaces = oldNetInterfaces
+		osStat = oldOsStat
+	}()
+
+	mac, _ := net.ParseMAC("aa:bb:cc:dd:ee:ff")
+	netInterfaces = func() ([]net.Interface, error) {
+		return []net.Interface{{Name: "eth0", HardwareAddr: mac, Flags: net.FlagUp}}, nil
+	}
+
+	osStat = func(name string) (os.FileInfo, error) {
+		return nil, nil // mock device file exists
+	}
+
 	opts, err := GetWOLInterfaces()
 	if err != nil {
-		if strings.Contains(err.Error(), "no suitable interfaces found") {
-			t.Skip("Skipping interface test: no suitable network interface found in this environment")
-		} else {
-			t.Fatalf("unexpected error getting interfaces: %v", err)
-		}
+		t.Fatalf("unexpected error getting interfaces: %v", err)
 	}
 
 	if len(opts) == 0 {
@@ -23,6 +35,7 @@ func TestGetWOLInterfaces(t *testing.T) {
 	}
 
 	for _, opt := range opts {
+		t.Logf("Found WOL capable interface: %s (%s)", opt.Name, opt.HardwareAddr.String())
 		if opt.HardwareAddr.String() == "" {
 			t.Errorf("expected non-empty hardware address for %s", opt.Name)
 		}
@@ -109,6 +122,13 @@ func TestGetWOLInterfaces_NoSuitable(t *testing.T) {
 func TestIsWOLCapableInterface(t *testing.T) {
 	mac, _ := net.ParseMAC("00:11:22:33:44:55")
 
+	oldOsStat := osStat
+	defer func() { osStat = oldOsStat }()
+
+	osStat = func(name string) (os.FileInfo, error) {
+		return nil, nil // mock device file exists
+	}
+
 	tests := []struct {
 		name     string
 		inf      net.Interface
@@ -133,6 +153,11 @@ func TestIsWOLCapableInterface(t *testing.T) {
 			name:     "virtual prefix",
 			inf:      net.Interface{Name: "docker0", HardwareAddr: mac, Flags: net.FlagUp},
 			expected: false,
+		},
+		{
+			name:     "valid interface",
+			inf:      net.Interface{Name: "eth0", HardwareAddr: mac, Flags: net.FlagUp},
+			expected: true,
 		},
 	}
 
