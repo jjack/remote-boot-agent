@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"charm.land/huh/v2"
+	"github.com/jjack/remote-boot-agent/internal/bootloader"
 	"github.com/spf13/cobra"
 )
 
@@ -22,12 +23,14 @@ func performInstall(cmd *cobra.Command, deps *CommandDeps, cfgFile string) error
 		return err
 	}
 
-	macAddress := deps.Config.Host.MACAddress
-	haURL := deps.Config.HomeAssistant.URL
-	webhookID := deps.Config.HomeAssistant.WebhookID
+	opts := bootloader.SetupOptions{
+		TargetMAC: deps.Config.Host.MACAddress,
+		TargetURL: deps.Config.HomeAssistant.URL,
+		AuthToken: deps.Config.HomeAssistant.WebhookID,
+	}
 
 	cmd.Printf("Installing into bootloader: %s\n", bl.Name())
-	if err := bl.Setup(cmd.Context(), macAddress, haURL, webhookID); err != nil {
+	if err := bl.Setup(cmd.Context(), opts); err != nil {
 		return fmt.Errorf("failed to install bootloader: %w", err)
 	}
 

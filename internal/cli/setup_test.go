@@ -30,10 +30,10 @@ func (m *mockInstallBootloader) GetBootOptions(ctx context.Context, cfg bootload
 	return nil, nil
 }
 
-func (m *mockInstallBootloader) Setup(ctx context.Context, macAddress, haURL, webhookID string) error {
-	m.mac = macAddress
-	m.url = haURL
-	m.webhook = webhookID
+func (m *mockInstallBootloader) Setup(ctx context.Context, opts bootloader.SetupOptions) error {
+	m.mac = opts.TargetMAC
+	m.url = opts.TargetURL
+	m.webhook = opts.AuthToken
 	return m.installErr
 }
 

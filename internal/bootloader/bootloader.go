@@ -10,11 +10,17 @@ type Config struct {
 	ConfigPath string
 }
 
+type SetupOptions struct {
+	TargetMAC string
+	TargetURL string
+	AuthToken string
+}
+
 type Bootloader interface {
 	IsActive(ctx context.Context) bool
 	GetBootOptions(ctx context.Context, cfg Config) ([]string, error)
 	Name() string
-	Setup(ctx context.Context, macAddress string, haURL string, webhookID string) error
+	Setup(ctx context.Context, opts SetupOptions) error
 	DiscoverConfigPath(ctx context.Context) (string, error)
 }
 

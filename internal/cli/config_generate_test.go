@@ -75,7 +75,7 @@ func (m *mockSurveyBootloader) GetBootOptions(ctx context.Context, cfg bootloade
 	return nil, nil
 }
 
-func (m *mockSurveyBootloader) Setup(ctx context.Context, macAddress, haURL, webhookID string) error {
+func (m *mockSurveyBootloader) Setup(ctx context.Context, opts bootloader.SetupOptions) error {
 	return nil
 }
 
@@ -483,7 +483,7 @@ func (m *mockInactiveBootloader) GetBootOptions(ctx context.Context, cfg bootloa
 	return nil, nil
 }
 
-func (m *mockInactiveBootloader) Setup(ctx context.Context, macAddress, haURL, webhookID string) error {
+func (m *mockInactiveBootloader) Setup(ctx context.Context, opts bootloader.SetupOptions) error {
 	return nil
 }
 
@@ -545,7 +545,7 @@ func (m *contextCancelingBootloader) GetBootOptions(ctx context.Context, cfg boo
 	return nil, nil
 }
 
-func (m *contextCancelingBootloader) Setup(ctx context.Context, macAddress, haURL, webhookID string) error {
+func (m *contextCancelingBootloader) Setup(ctx context.Context, opts bootloader.SetupOptions) error {
 	return nil
 }
 
