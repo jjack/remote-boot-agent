@@ -3,38 +3,40 @@
 set -e
 
 cat <<'EOF'
-echo "Loading network modules..."
 insmod net
 insmod efinet
 insmod http
 
-# Give the hardware a second to enumerate
-sleep 2
+set fetch_success="0"
 
-# This MAC address is hardcoded by your Go installer
-set target_mac="{{ .MACAddress }}"
-set target_interface=""
+# Safely store the URL as a string to prevent wildcard/query parser crashes.
+set boot_url="(http,{{ .Host }})/api/remote_boot_manager/{{ .MACAddress }}?token={{ .WebhookID }}"
 
-# Unrolled evaluation checking common GRUB UEFI/Legacy interface names
-if [ "$net_efinet0_mac" = "$target_mac" ]; then set target_interface="efinet0"; fi
-if [ "$net_efinet1_mac" = "$target_mac" ]; then set target_interface="efinet1"; fi
-if [ "$net_efinet2_mac" = "$target_mac" ]; then set target_interface="efinet2"; fi
-if [ "$net_efi0_mac" = "$target_mac" ]; then set target_interface="efi0"; fi
-if [ "$net_efi1_mac" = "$target_mac" ]; then set target_interface="efi1"; fi
-if [ "$net_net0_mac" = "$target_mac" ]; then set target_interface="net0"; fi
-if [ "$net_net1_mac" = "$target_mac" ]; then set target_interface="net1"; fi
+# Wait up to 35 seconds for Spanning Tree Protocol to clear
+# GRUB can't math, so we iterate over a literal list of 35 items
+for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35; do
+    if net_bootp; then
+        # Try to fetch the Home Assistant webhook using the safe variable
+        if source $boot_url; then
+            set fetch_success="1"
+            echo "Success! Payload received."
+            break
+        fi
+    fi
+    
+    # If either DHCP or the HTTP fetch fails, wait 1 second and try again
+    sleep 1
+done
 
-if [ -n "$target_interface" ]; then
-    echo "Found MAC on $target_interface. Requesting DHCP..."
-    net_bootp $target_interface
-else
-    echo "Warning: MAC not found. Broadcasting on all interfaces..."
-    net_bootp
+# Check if we broke out of the loop successfully or exhausted all 35 attempts
+if [ "$fetch_success" = "0" ]; then
+    echo "CRITICAL: Switch port never opened or HA is down."
+    echo "Falling back to default OS in 3 seconds..."
+    sleep 3
 fi
 
-# Wait for the DHCP lease and route to settle
-sleep 3
-
-echo "Fetching boot instructions from Home Assistant..."
-source ({{ .Protocol }},{{ .Host }})/api/remote_boot_manager/{{ .MACAddress }}?token={{ .WebhookID }}
+# Apply the override if the payload provided one
+if [ -n "$next_entry" ]; then
+    set default="$next_entry"
+fi
 EOF
