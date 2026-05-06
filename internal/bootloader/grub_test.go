@@ -340,14 +340,43 @@ func TestGrub_IsActive_And_Discover(t *testing.T) {
 func TestGrub_GetBootOptions_PermissionDenied(t *testing.T) {
 	bl := NewGrub()
 
-	// A directory is guaranteed to fail opening as a file without root concerns
-	// affecting the strict permissions check as much as a 0000 file might on some CI runners.
-	_, err := bl.GetBootOptions(context.Background(), Config{ConfigPath: t.TempDir()})
-	if err == nil {
-		t.Fatal("expected error reading directory as file")
+	tempFile := filepath.Join(t.TempDir(), "unreadable.cfg")
+	if err := os.WriteFile(tempFile, []byte("test"), 0o200); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
 	}
-	if !strings.Contains(err.Error(), "permission denied reading grub config") && !strings.Contains(err.Error(), "failed to open grub config") && !strings.Contains(err.Error(), "error reading grub config") {
-		t.Errorf("expected file open or read error, got: %v", err)
+
+	_, err := bl.GetBootOptions(context.Background(), Config{ConfigPath: tempFile})
+	if err == nil {
+		t.Skip("expected error reading write-only file (running as root?)")
+	}
+	if !strings.Contains(err.Error(), "permission denied reading grub config") {
+		if strings.Contains(err.Error(), "failed to open grub config") {
+			t.Skipf("Got non-permission error during file open, skipping strict permission check: %v", err)
+		}
+		t.Errorf("expected permission denied error, got: %v", err)
+	}
+}
+
+func TestGrub_Setup_TemplateErrors(t *testing.T) {
+	bl := NewGrub()
+	ctx := context.Background()
+
+	originalTemplate := grubTemplate
+	defer func() { grubTemplate = originalTemplate }()
+
+	// 1. Template parse error
+	grubTemplate = "{{ unclosed"
+	err := bl.Setup(ctx, "mac", "http://hass.local", "test_webhook")
+	if err == nil || !strings.Contains(err.Error(), "failed to parse grub template") {
+		t.Fatalf("expected template parse error, got %v", err)
+	}
+
+	// 2. Template execute error
+	// Accessing a nonexistent field on a string will cause template execution to fail
+	grubTemplate = "{{ .Protocol.NonExistentField }}"
+	err = bl.Setup(ctx, "mac", "http://hass.local", "test_webhook")
+	if err == nil || !strings.Contains(err.Error(), "failed to execute grub template") {
+		t.Fatalf("expected template execute error, got %v", err)
 	}
 }
 
