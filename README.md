@@ -22,11 +22,11 @@ After installation, whenever your server shuts down, `remote-boot-agent` will re
 
 **Requirements:**
 - [Home Assistant](https://www.home-assistant.io/)
-- [Home Assistant Remote Boot Manager](https://github.com/jjack/hass-remote-boot-manager) Integration
+- [Home Assistant Remote Boot Manager](https://github.com/jjack/ha-remote-boot-manager) Integration
 - Supported Bootloader and Init System (see above)
 
 **Recommended Installation:**
-1. Download the latest pre-built package for your OS from the [Releases Page](https://github.com/jjack/hass-remote-boot-manager/releases/latest).
+1. Download the latest pre-built package for your OS from the [Releases Page](https://github.com/jjack/ha-remote-boot-manager/releases/latest).
 2. Install the package (e.g., `sudo dpkg -i remote-boot-agent_*_amd64.deb`).
 3. Run the automated setup wizard to auto-detect and configure your network info, home assistant info, bootloader, and init system:
    ```bash
