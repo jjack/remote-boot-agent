@@ -244,6 +244,28 @@ func TestGenerateConfigSurvey_FormErrors(t *testing.T) {
 		}
 		resetMocks()
 	})
+
+	t.Run("Detect System Hostname Error", func(t *testing.T) {
+		d := setupSurveyDeps()
+		d.SystemResolver = &mockSystemResolver{
+			detectSystemHostnameFunc: func() (string, error) { return "", errors.New("simulated hostname error") },
+		}
+		_, err := generateConfigInteractive(context.Background(), d)
+		if err == nil || err.Error() != "simulated hostname error" {
+			t.Fatalf("expected simulated hostname error, got %v", err)
+		}
+	})
+
+	t.Run("Get WOL Interfaces Error", func(t *testing.T) {
+		d := setupSurveyDeps()
+		d.SystemResolver = &mockSystemResolver{
+			getWOLInterfacesFunc: func() ([]net.Interface, error) { return nil, errors.New("simulated wol interfaces error") },
+		}
+		_, err := generateConfigInteractive(context.Background(), d)
+		if err == nil || err.Error() != "simulated wol interfaces error" {
+			t.Fatalf("expected simulated wol interfaces error, got %v", err)
+		}
+	})
 }
 
 func TestGenerateConfigSurvey_OptErrors(t *testing.T) {
@@ -251,7 +273,7 @@ func TestGenerateConfigSurvey_OptErrors(t *testing.T) {
 		oldRunHostInfoForm := runHostInfoForm
 
 		runHostInfoForm = func(resolver SystemResolver, io []huh.Option[string], im map[string]net.Interface, h string) (hostInfoResults, []huh.Option[string], error) {
-			return hostInfoResults{Name: "test", IfaceName: "eth0", MACAddress: "", HostAddress: "192.168.1.100"}, []huh.Option[string]{}, nil
+			return hostInfoResults{Name: "test", IfaceName: "eth0", MACAddress: "invalid-mac"}, []huh.Option[string]{}, nil
 		}
 		defer func() {
 			runHostInfoForm = oldRunHostInfoForm
@@ -451,4 +473,122 @@ func TestPrintConfigSummary(t *testing.T) {
 	if !strings.Contains(out, "abcd...") {
 		t.Errorf("expected truncated webhook id, got %s", out)
 	}
+}
+
+type mockInactiveBootloader struct{}
+
+func (m *mockInactiveBootloader) Name() string                      { return "inactive-bl" }
+func (m *mockInactiveBootloader) IsActive(ctx context.Context) bool { return false }
+func (m *mockInactiveBootloader) GetBootOptions(ctx context.Context, cfg bootloader.Config) ([]string, error) {
+	return nil, nil
+}
+
+func (m *mockInactiveBootloader) Setup(ctx context.Context, macAddress, haURL, webhookID string) error {
+	return nil
+}
+
+func (m *mockInactiveBootloader) DiscoverConfigPath(ctx context.Context) (string, error) {
+	return "", nil
+}
+
+type mockInactiveInitSystem struct{}
+
+func (m *mockInactiveInitSystem) Name() string                                       { return "inactive-init" }
+func (m *mockInactiveInitSystem) IsActive(ctx context.Context) bool                  { return false }
+func (m *mockInactiveInitSystem) Setup(ctx context.Context, configPath string) error { return nil }
+
+func TestEnsureSupport(t *testing.T) {
+	t.Run("Bootloader Not Supported", func(t *testing.T) {
+		deps := setupSurveyDeps()
+		blReg := bootloader.NewRegistry()
+		blReg.Register("inactive-bl", func() bootloader.Bootloader { return &mockInactiveBootloader{} })
+		deps.BootloaderRegistry = blReg
+
+		err := ensureSupport(context.Background(), deps)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "no supported bootloader detected") {
+			t.Errorf("expected bootloader not supported error, got %v", err)
+		}
+		if !strings.Contains(err.Error(), "inactive-bl") {
+			t.Errorf("expected error to list 'inactive-bl', got %v", err)
+		}
+	})
+
+	t.Run("InitSystem Not Supported", func(t *testing.T) {
+		deps := setupSurveyDeps()
+		initReg := initsystem.NewRegistry()
+		initReg.Register("inactive-init", func() initsystem.InitSystem { return &mockInactiveInitSystem{} })
+		deps.InitRegistry = initReg
+
+		err := ensureSupport(context.Background(), deps)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "no supported init system detected") {
+			t.Errorf("expected init system not supported error, got %v", err)
+		}
+		if !strings.Contains(err.Error(), "inactive-init") {
+			t.Errorf("expected error to list 'inactive-init', got %v", err)
+		}
+	})
+}
+
+type contextCancelingBootloader struct {
+	cancel context.CancelFunc
+}
+
+func (m *contextCancelingBootloader) Name() string                      { return "canceler" }
+func (m *contextCancelingBootloader) IsActive(ctx context.Context) bool { m.cancel(); return true }
+func (m *contextCancelingBootloader) GetBootOptions(ctx context.Context, cfg bootloader.Config) ([]string, error) {
+	return nil, nil
+}
+
+func (m *contextCancelingBootloader) Setup(ctx context.Context, macAddress, haURL, webhookID string) error {
+	return nil
+}
+
+func (m *contextCancelingBootloader) DiscoverConfigPath(ctx context.Context) (string, error) {
+	return "", nil
+}
+
+func TestEnsureSupport_GenericErrors(t *testing.T) {
+	t.Run("Bootloader Generic Error", func(t *testing.T) {
+		deps := setupSurveyDeps()
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel() // Cancel immediately
+
+		err := ensureSupport(ctx, deps)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("expected context.Canceled, got %v", err)
+		}
+	})
+
+	t.Run("InitSystem Generic Error", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		blReg := bootloader.NewRegistry()
+		blReg.Register("canceler", func() bootloader.Bootloader { return &contextCancelingBootloader{cancel: cancel} })
+
+		initReg := initsystem.NewRegistry()
+		initReg.Register("systemd", func() initsystem.InitSystem { return &mockSurveyInitSystem{} })
+
+		deps := &CommandDeps{
+			BootloaderRegistry: blReg,
+			InitRegistry:       initReg,
+		}
+
+		err := ensureSupport(ctx, deps)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("expected context.Canceled, got %v", err)
+		}
+	})
 }

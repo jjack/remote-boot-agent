@@ -44,6 +44,10 @@ func (r *Registry) Get(name string) Bootloader {
 }
 
 func (r *Registry) Detect(ctx context.Context) (Bootloader, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	var names []string
 	for name := range r.bootloaders {
 		names = append(names, name)
@@ -52,6 +56,10 @@ func (r *Registry) Detect(ctx context.Context) (Bootloader, error) {
 	sort.Strings(names)
 
 	for _, name := range names {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+
 		factory := r.bootloaders[name]
 		bl := factory()
 		if bl.IsActive(ctx) {

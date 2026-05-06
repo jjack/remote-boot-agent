@@ -38,6 +38,10 @@ func (r *Registry) Get(name string) InitSystem {
 }
 
 func (r *Registry) Detect(ctx context.Context) (InitSystem, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	// Iterate through map keys in a sorted order for deterministic detection tests
 	var names []string
 	for name := range r.initsystems {
@@ -46,6 +50,10 @@ func (r *Registry) Detect(ctx context.Context) (InitSystem, error) {
 	sort.Strings(names)
 
 	for _, name := range names {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+
 		sys := r.initsystems[name]()
 		if sys.IsActive(ctx) {
 			return sys, nil
