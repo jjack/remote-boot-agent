@@ -97,7 +97,7 @@ func NewCLI() *CLI {
 		},
 	}
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "./config.yaml", "config file")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "/etc/remote-boot-agent/config.yaml", "config file")
 	rootCmd.PersistentFlags().String("mac", "", "MAC Address override")
 	rootCmd.PersistentFlags().String("name", "", "Name override")
 	rootCmd.PersistentFlags().String("address", "", "Address override")

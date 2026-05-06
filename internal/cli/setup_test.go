@@ -574,6 +574,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 			var out bytes.Buffer
 			cmd.SetOut(&out)
 			cmd.SetErr(&out)
+			cmd.Flags().String("config", "dummy.yaml", "")
 			cmd.SetArgs([]string{"--config", "dummy.yaml"})
 
 			err := cmd.Execute()

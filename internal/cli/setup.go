@@ -138,8 +138,5 @@ func NewSetupCmd(deps *CommandDeps) *cobra.Command {
 		},
 	}
 
-	// In setup, we default to the system path instead of local,
-	// because this is expected to be run as sudo for permanent installation.
-	cmd.Flags().String("config", "/etc/remote-boot-agent/config.yaml", "Path to save the generated config file")
 	return cmd
 }
