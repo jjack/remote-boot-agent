@@ -2,11 +2,14 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"charm.land/huh/v2"
 	"github.com/spf13/cobra"
 )
+
+var osMkdirAll = os.MkdirAll
 
 func performInstall(cmd *cobra.Command, deps *CommandDeps, cfgFile string) error {
 	bl, err := deps.Bootloader(cmd.Context())
@@ -97,6 +100,10 @@ func NewSetupCmd(deps *CommandDeps) *cobra.Command {
 			}
 
 			printConfigSummary(cmd, cfg, cfgPath)
+
+			if err := osMkdirAll(filepath.Dir(cfgPath), 0o755); err != nil {
+				return fmt.Errorf("failed to create config directory: %w", err)
+			}
 
 			if err := deps.SystemResolver.SaveConfig(cfg, cfgPath); err != nil {
 				return err

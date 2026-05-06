@@ -313,6 +313,10 @@ func TestSetupCmd_ConfigFlagFallback(t *testing.T) {
 		runConfirm = oldRunConfirm
 	}()
 
+	oldOsMkdirAll := osMkdirAll
+	osMkdirAll = func(path string, perm os.FileMode) error { return nil }
+	defer func() { osMkdirAll = oldOsMkdirAll }()
+
 	runGenerateSurvey = func(ctx context.Context, deps *CommandDeps) (*config.Config, error) {
 		return &config.Config{
 			Bootloader: config.BootloaderConfig{Name: "mock-bl"},
@@ -360,6 +364,10 @@ func TestSetupCmd_Execute(t *testing.T) {
 		runGenerateSurvey = oldRunGenerateSurvey
 		runConfirm = oldRunConfirm
 	}()
+
+	oldOsMkdirAll := osMkdirAll
+	osMkdirAll = func(path string, perm os.FileMode) error { return nil }
+	defer func() { osMkdirAll = oldOsMkdirAll }()
 
 	tests := []struct {
 		name        string
