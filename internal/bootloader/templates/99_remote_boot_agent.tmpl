@@ -2,7 +2,7 @@
 
 set -e
 
-cat <<EOF
+cat <<'EOF'
 echo "Loading network modules..."
 insmod net
 insmod efinet
@@ -12,7 +12,7 @@ insmod http
 sleep 2
 
 # This MAC address is hardcoded by your Go installer
-set target_mac="cc:28:aa:0c:ab:0d"
+set target_mac="{{ .MACAddress }}"
 set target_interface=""
 
 # Unrolled evaluation checking common GRUB UEFI/Legacy interface names
