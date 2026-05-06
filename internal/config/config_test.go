@@ -107,11 +107,11 @@ func TestConfig_SaveAndLoad_Defaults(t *testing.T) {
 		t.Fatalf("failed to load config: %v", err)
 	}
 
-	if loadedCfg.Host.BroadcastAddress != DefaultBroadcastAddress {
-		t.Errorf("expected broadcast address %s, got %s", DefaultBroadcastAddress, loadedCfg.Host.BroadcastAddress)
+	if loadedCfg.Host.BroadcastAddress != "" {
+		t.Errorf("expected broadcast address to be empty, got %s", loadedCfg.Host.BroadcastAddress)
 	}
-	if loadedCfg.Host.BroadcastPort != DefaultBroadcastPort {
-		t.Errorf("expected broadcast port %d, got %d", DefaultBroadcastPort, loadedCfg.Host.BroadcastPort)
+	if loadedCfg.Host.BroadcastPort != 0 {
+		t.Errorf("expected broadcast port to be 0, got %d", loadedCfg.Host.BroadcastPort)
 	}
 }
 

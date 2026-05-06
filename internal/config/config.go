@@ -52,9 +52,6 @@ func Load(cfgFile string, flags *pflag.FlagSet) (*Config, error) {
 		v.SetConfigType("yaml")
 	}
 
-	v.SetDefault("host.broadcast_address", DefaultBroadcastAddress)
-	v.SetDefault("host.broadcast_port", DefaultBroadcastPort)
-
 	if flags != nil {
 		_ = v.BindPFlag("host.mac", flags.Lookup("mac"))
 		_ = v.BindPFlag("host.name", flags.Lookup("name"))
