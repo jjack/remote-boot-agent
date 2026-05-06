@@ -15,6 +15,7 @@ var (
 	getAddrs       = func(iface net.Interface) ([]net.Addr, error) {
 		return iface.Addrs()
 	}
+	osStat = os.Stat
 )
 
 var (
@@ -45,7 +46,7 @@ func isWOLCapableInterface(inf net.Interface) bool {
 	}
 
 	path := fmt.Sprintf("/sys/class/net/%s/device", inf.Name)
-	_, err := os.Stat(path)
+	_, err := osStat(path)
 	return !os.IsNotExist(err)
 }
 
