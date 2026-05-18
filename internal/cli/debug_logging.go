@@ -11,13 +11,14 @@ import (
 
 // memHandler is a thread-safe slog handler that writes to a buffer.
 type memHandler struct {
-	mu     sync.Mutex
+	mu     *sync.Mutex
 	buf    *bytes.Buffer
 	parent slog.Handler
 }
 
 func newMemHandler(buf *bytes.Buffer, parent slog.Handler) *memHandler {
 	return &memHandler{
+		mu:     &sync.Mutex{},
 		buf:    buf,
 		parent: parent,
 	}
@@ -51,6 +52,7 @@ func (h *memHandler) Handle(ctx context.Context, r slog.Record) error {
 
 func (h *memHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	return &memHandler{
+		mu:     h.mu,
 		buf:    h.buf,
 		parent: h.parent.WithAttrs(attrs),
 	}
@@ -58,6 +60,7 @@ func (h *memHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 
 func (h *memHandler) WithGroup(name string) slog.Handler {
 	return &memHandler{
+		mu:     h.mu,
 		buf:    h.buf,
 		parent: h.parent.WithGroup(name),
 	}
