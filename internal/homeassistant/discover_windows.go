@@ -38,7 +38,7 @@ func Discover(ctx context.Context) ([]ServiceInstance, error) {
 	instancesMap := make(map[string]*ServiceInstance)
 
 	var wg sync.WaitGroup
-	
+
 	// Create a context for the listener goroutines
 	listenCtx, cancel := context.WithTimeout(ctx, discoveryTimeout)
 	defer cancel()
@@ -52,7 +52,7 @@ func Discover(ctx context.Context) ([]ServiceInstance, error) {
 		wg.Add(1)
 		go func(iface net.Interface) {
 			defer wg.Done()
-			
+
 			conn, err := net.ListenMulticastUDP("udp4", &iface, addr)
 			if err != nil {
 				return
@@ -152,4 +152,13 @@ func processResponse(res *dns.Msg, mu *sync.Mutex, instances map[string]*Service
 			}
 		}
 	}
+}
+
+func contains(slice []string, val string) bool {
+	for _, item := range slice {
+		if item == val {
+			return true
+		}
+	}
+	return false
 }

@@ -293,7 +293,7 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 				if err != nil {
 					return fmt.Errorf("could not connect to HA URL: %v", err)
 				}
-				defer resp.Body.Close()
+				defer func() { _ = resp.Body.Close() }()
 
 				// We don't necessarily care about the status code (it might be 401/404 for HA without auth),
 				// just that the server is reachable.
@@ -377,7 +377,7 @@ func buildWolSelectOptions(hostAddress string, ips []string, ipBroadcasts map[st
 		if !ok {
 			continue
 		}
-		
+
 		// WOL is almost exclusively an IPv4 UDP broadcast mechanism.
 		// We only want to present IPv4 subnet broadcasts.
 		if net.ParseIP(bc).To4() == nil {

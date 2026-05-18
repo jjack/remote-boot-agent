@@ -60,7 +60,7 @@ func TestExtractURLs(t *testing.T) {
 			expected: []string{"http://ha.local:8123", "http://base.local", "http://192.168.1.100:8123"},
 		},
 		{
-			name: "no useful info",
+			name:     "no useful info",
 			entry:    &mdns.ServiceEntry{},
 			expected: nil,
 		},

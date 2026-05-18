@@ -16,10 +16,10 @@ func ElevateAndApply(ctx context.Context, cfgFile string) error {
 	}
 
 	args := fmt.Sprintf("setup --apply --config \"%s\"", cfgFile)
-	
-	cmd := exec.CommandContext(ctx, "powershell", "-NoProfile", "-WindowStyle", "Normal", "-Command", 
+
+	cmd := exec.CommandContext(ctx, "powershell", "-NoProfile", "-WindowStyle", "Normal", "-Command",
 		fmt.Sprintf("Start-Process -FilePath '%s' -ArgumentList '%s' -Verb RunAs -Wait", exe, args))
-	
+
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to request elevation: %w", err)
 	}

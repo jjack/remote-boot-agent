@@ -34,7 +34,7 @@ func TestDiscover_Success(t *testing.T) {
 	defer func() { discoveryTimeout = oldTimeout }()
 
 	addr, _ := net.ResolveUDPAddr("udp4", "224.0.0.251:5353")
-	
+
 	stop := make(chan struct{})
 	go func() {
 		conn, err := net.ListenMulticastUDP("udp4", nil, addr)
@@ -57,25 +57,25 @@ func TestDiscover_Success(t *testing.T) {
 							res := new(dns.Msg)
 							res.MsgHdr.Response = true
 							res.MsgHdr.Authoritative = true
-							
+
 							ptr := &dns.PTR{
 								Hdr: dns.RR_Header{Name: homeAssistantService, Rrtype: dns.TypePTR, Class: dns.ClassINET, Ttl: 120},
 								Ptr: "MockHA." + homeAssistantService,
 							}
 							res.Answer = append(res.Answer, ptr)
-							
+
 							txt := &dns.TXT{
 								Hdr: dns.RR_Header{Name: "MockHA." + homeAssistantService, Rrtype: dns.TypeTXT, Class: dns.ClassINET, Ttl: 120},
 								Txt: []string{"internal_url=http://mockha.local:8123"},
 							}
 							res.Extra = append(res.Extra, txt)
-							
+
 							a := &dns.A{
 								Hdr: dns.RR_Header{Name: "mockha-uuid.local.", Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 120},
 								A:   net.ParseIP("127.0.0.1"),
 							}
 							res.Extra = append(res.Extra, a)
-							
+
 							srv := &dns.SRV{
 								Hdr:    dns.RR_Header{Name: "MockHA." + homeAssistantService, Rrtype: dns.TypeSRV, Class: dns.ClassINET, Ttl: 120},
 								Target: "mockha-uuid.local.",
