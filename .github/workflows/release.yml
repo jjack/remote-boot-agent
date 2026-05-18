@@ -35,7 +35,8 @@ jobs:
       - name: Install WiX Toolset
         run: |
           dotnet tool install --global wix
-          wix extension install WixToolset.UI.wixext --global
+          wix eula accept wix7
+          wix extension add WixToolset.UI.wixext -g
 
       - uses: goreleaser/goreleaser-action@v7
         with:
@@ -43,3 +44,4 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AcceptEula: wix7
