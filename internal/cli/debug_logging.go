@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"reflect"
 	"sync"
 )
 
@@ -32,8 +33,6 @@ func (h *memHandler) Enabled(ctx context.Context, level slog.Level) bool {
 
 func (h *memHandler) Handle(ctx context.Context, r slog.Record) error {
 	h.mu.Lock()
-	defer h.mu.Unlock()
-
 	// 1. Log to the in-memory buffer (always DEBUG level)
 	// We use a simple text format for the debug dump
 	fmt.Fprintf(h.buf, "[%s] %s: %s", r.Time.Format("15:04:05.000"), r.Level, r.Message)
@@ -42,6 +41,7 @@ func (h *memHandler) Handle(ctx context.Context, r slog.Record) error {
 		return true
 	})
 	fmt.Fprintln(h.buf)
+	h.mu.Unlock()
 
 	// 2. Delegate to the parent (which might be the default stdout handler)
 	if h.parent.Enabled(ctx, r.Level) {
@@ -70,6 +70,14 @@ func (h *memHandler) WithGroup(name string) slog.Handler {
 func setupDebugLogging() (dumpFunc func(err error)) {
 	var buf bytes.Buffer
 	originalHandler := slog.Default().Handler()
+
+	// If the current handler is the default one from the slog package, wrapping it
+	// and then calling slog.SetDefault will cause infinite recursion and deadlock
+	// because SetDefault redirects the standard log package back to the new default,
+	// while the old default handler delegates its work to the standard log package.
+	if reflect.TypeOf(originalHandler).String() == "*slog.defaultHandler" {
+		originalHandler = slog.NewTextHandler(os.Stderr, nil)
+	}
 
 	// We wrap the current handler. This ensures that:
 	// 1. The user still sees what they usually see on the console.
