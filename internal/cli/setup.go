@@ -167,6 +167,9 @@ func NewSetupCmd(deps *CommandDeps) *cobra.Command {
 			return nil // Override root config loading, we are generating it from scratch
 		},
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
+			dump := setupDebugLogging()
+			defer func() { dump(err) }()
+
 			if runtime.GOOS == "windows" {
 				defer func() {
 					if err != nil && err != ErrElevated {
