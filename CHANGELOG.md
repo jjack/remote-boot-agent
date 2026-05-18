@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.7.0](https://github.com/jjack/grubstation/compare/v1.6.1...v1.7.0) (2026-05-18)
+
+
+### Features
+
+* adding "setup --apply" to let you apply your config changes; added warning when wait_time_seconds is drifting from config ([d5d83a9](https://github.com/jjack/grubstation/commit/d5d83a9170d1dbf7e827c83894cfecd610803723))
+* adding a debug log dump in caes of install error ([1af569b](https://github.com/jjack/grubstation/commit/1af569b4f860e3f0723a67acfca14b16bb5bf49f))
+* using dnssd instead of mdns because it works much better with mdns reflection on windows ([668b524](https://github.com/jjack/grubstation/commit/668b52464c6a494cac8d85e068b5bfbabc9d9f05))
+
 ## [1.6.0](https://github.com/jjack/grubstation/compare/v1.5.0...v1.6.0) (2026-05-18)
 
 
