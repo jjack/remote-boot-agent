@@ -2,8 +2,11 @@ package cli
 
 import (
 	"context"
+	"log/slog"
 
+	"github.com/jjack/grubstation/internal/config"
 	"github.com/jjack/grubstation/internal/daemon"
+	"github.com/jjack/grubstation/internal/grub"
 	"github.com/jjack/grubstation/internal/host"
 	"github.com/jjack/grubstation/internal/reporter"
 	"github.com/jjack/grubstation/internal/version"
@@ -36,6 +39,30 @@ func NewServeCmd(deps *CommandDeps) *cobra.Command {
 				rep := reporter.New(deps.Config, deps.Grub, mgrName)
 				regHandler = rep.RegisterDaemon
 				updateHandler = rep.PushBootOptions
+
+				// Drift detection
+				waitTime := config.DefaultGrubWaitSeconds
+				targetURL := deps.Config.HomeAssistant.URL
+				if deps.Config.Grub != nil {
+					if deps.Config.Grub.WaitTimeSeconds != 0 {
+						waitTime = deps.Config.Grub.WaitTimeSeconds
+					}
+					if deps.Config.Grub.URL != "" {
+						targetURL = deps.Config.Grub.URL
+					}
+				}
+
+				drift, err := deps.Grub.CheckDrift(grub.SetupOptions{
+					TargetMAC:       deps.Config.Host.MACAddress,
+					TargetURL:       targetURL,
+					AuthToken:       deps.Config.HomeAssistant.WebhookID,
+					WaitTimeSeconds: waitTime,
+				})
+				if err == nil && drift {
+					slog.Warn("GRUB configuration drift detected. Your installed GRUB script does not match the current config. Run 'grubstation setup --apply' to sync.")
+				} else if err != nil {
+					slog.Debug("Failed to check for GRUB drift", "error", err)
+				}
 			}
 			d := newServe(daemon.Config{
 				Port:              deps.Config.Daemon.Port,

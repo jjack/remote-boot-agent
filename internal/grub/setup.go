@@ -39,36 +39,12 @@ func generateWaitList(seconds int) string {
 
 // Setup creates a GRUB remote boot agent script in /etc/grub.d and updates the GRUB config.
 func (g *Grub) Setup(ctx context.Context, opts SetupOptions) error {
-	u, err := url.Parse(opts.TargetURL)
-	if err != nil || u.Scheme == "" || u.Host == "" {
-		return ErrInvalidHAURL
-	}
-
-	tmpl, err := template.New("grub").Parse(grubTemplate)
+	content, err := g.generateScript(opts)
 	if err != nil {
-		return fmt.Errorf("failed to parse grub template: %w", err)
+		return err
 	}
 
-	data := struct {
-		Host            string
-		MACAddress      string
-		WebhookID       string
-		WaitTimeSeconds int
-		WaitList        string
-	}{
-		Host:            u.Host,
-		MACAddress:      opts.TargetMAC,
-		WebhookID:       opts.AuthToken,
-		WaitTimeSeconds: opts.WaitTimeSeconds,
-		WaitList:        generateWaitList(opts.WaitTimeSeconds),
-	}
-
-	var content strings.Builder
-	if err := tmpl.Execute(&content, data); err != nil {
-		return fmt.Errorf("failed to execute grub template: %w", err)
-	}
-
-	if err := os.WriteFile(HassGrubStationPath, []byte(content.String()), 0o755); err != nil {
+	if err := os.WriteFile(HassGrubStationPath, []byte(content), 0o755); err != nil {
 		return fmt.Errorf("failed to create grub script (are you running as root?): %w", err)
 	}
 
@@ -87,6 +63,57 @@ func (g *Grub) Setup(ctx context.Context, opts SetupOptions) error {
 		return nil
 	}
 	return ErrNoGrubTool
+}
+
+// CheckDrift returns true if the installed GRUB script differs from what the current options would generate.
+func (g *Grub) CheckDrift(opts SetupOptions) (bool, error) {
+	expected, err := g.generateScript(opts)
+	if err != nil {
+		return false, err
+	}
+
+	actual, err := os.ReadFile(HassGrubStationPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return true, nil // It doesn't exist, so it's definitely drifting (not installed)
+		}
+		return false, fmt.Errorf("failed to read installed grub script: %w", err)
+	}
+
+	return string(actual) != expected, nil
+}
+
+func (g *Grub) generateScript(opts SetupOptions) (string, error) {
+	u, err := url.Parse(opts.TargetURL)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return "", ErrInvalidHAURL
+	}
+
+	tmpl, err := template.New("grub").Parse(grubTemplate)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse grub template: %w", err)
+	}
+
+	data := struct {
+		Host            string
+		MACAddress      string
+		WebhookID       string
+		WaitTimeSeconds int
+		WaitList        string
+	}{
+		Host:            u.Host,
+		MACAddress:      opts.TargetMAC,
+		WebhookID:       opts.AuthToken,
+		WaitTimeSeconds: opts.WaitTimeSeconds,
+		WaitList:        generateWaitList(opts.WaitTimeSeconds),
+	}
+
+	var content strings.Builder
+	if err := tmpl.Execute(&content, data); err != nil {
+		return "", fmt.Errorf("failed to execute grub template: %w", err)
+	}
+
+	return content.String(), nil
 }
 
 // SetupWarning returns a message about potential hardware incompatibilities with GRUB networking.

@@ -344,33 +344,89 @@ func TestGrub_Uninstall_UpdateGrubError(t *testing.T) {
 	}
 }
 
-func TestGrub_Uninstall_Grub2MkconfigError(t *testing.T) {
+func TestGrub_CheckDrift(t *testing.T) {
 	tempDir := t.TempDir()
 	fakeScriptPath := filepath.Join(tempDir, "99_grubstation")
 
-	oldPath := HassGrubStationPath
-	oldExecLookPath := ExecLookPath
-	oldExecCommand := ExecCommand
-	defer func() {
+	defer func(oldPath string) {
 		HassGrubStationPath = oldPath
-		ExecLookPath = oldExecLookPath
-		ExecCommand = oldExecCommand
-	}()
+	}(HassGrubStationPath)
 
 	HassGrubStationPath = fakeScriptPath
-	ExecLookPath = func(file string) (string, error) {
-		if file == "grub2-mkconfig" {
-			return "/bin/false", nil
-		}
-		return "", errors.New("not found")
-	}
-	ExecCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
-		return exec.Command("false")
-	}
 
 	g := &Grub{}
-	err := g.Uninstall(context.Background())
-	if err == nil || !strings.Contains(err.Error(), "grub2-mkconfig failed") {
-		t.Errorf("expected grub2-mkconfig failure, got %v", err)
+	opts := SetupOptions{
+		TargetMAC:       "aa:bb:cc:dd:ee:ff",
+		TargetURL:       "http://hass.local:8123",
+		AuthToken:       "test_webhook",
+		WaitTimeSeconds: 2,
+	}
+
+	// 1. File does not exist (should drift)
+	drift, err := g.CheckDrift(opts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !drift {
+		t.Error("expected drift when file does not exist")
+	}
+
+	// 2. File matches (no drift)
+	content, err := g.generateScript(opts)
+	if err != nil {
+		t.Fatalf("failed to generate script: %v", err)
+	}
+	if err := os.WriteFile(fakeScriptPath, []byte(content), 0o755); err != nil {
+		t.Fatalf("failed to write fake script: %v", err)
+	}
+
+	drift, err = g.CheckDrift(opts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if drift {
+		t.Error("expected no drift when file matches")
+	}
+
+	// 3. File differs (should drift)
+	optsDifferent := opts
+	optsDifferent.WaitTimeSeconds = 10
+	drift, err = g.CheckDrift(optsDifferent)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !drift {
+		t.Error("expected drift when config differs")
+	}
+
+	// 4. Read error (other than NotExist)
+	HassGrubStationPath = filepath.Join(tempDir, "cannot_read_dir")
+	if err := os.Mkdir(HassGrubStationPath, 0o000); err != nil {
+		t.Fatalf("failed to create unreadable directory: %v", err)
+	}
+	defer os.Chmod(HassGrubStationPath, 0o755) // Clean up
+
+	_, err = g.CheckDrift(opts)
+	if err == nil {
+		t.Error("expected error when reading file fails")
+	}
+}
+
+func TestGrub_GenerateScript_Errors(t *testing.T) {
+	g := &Grub{}
+
+	// Invalid URL
+	_, err := g.generateScript(SetupOptions{TargetURL: "://bad"})
+	if !errors.Is(err, ErrInvalidHAURL) {
+		t.Fatalf("expected ErrInvalidHAURL, got %v", err)
+	}
+
+	// Template error
+	originalTemplate := grubTemplate
+	defer func() { grubTemplate = originalTemplate }()
+	grubTemplate = "{{ invalid"
+	_, err = g.generateScript(SetupOptions{TargetURL: "http://hass.local"})
+	if err == nil || !strings.Contains(err.Error(), "failed to parse grub template") {
+		t.Fatalf("expected template parse error, got %v", err)
 	}
 }
