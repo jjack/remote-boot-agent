@@ -404,6 +404,33 @@ func TestServiceRemoveCmd_UnregisterFallback(t *testing.T) {
 	}
 }
 
+func TestServiceInstallCmd_Error(t *testing.T) {
+	initReg := servicemanager.NewRegistry()
+	mock := &mockServiceManager{name: "mock-svc", active: true, installErr: errors.New("install failed")}
+	initReg.Register("mock-svc", func() servicemanager.Manager { return mock })
+
+	deps := &CommandDeps{
+		Config:   &config.Config{},
+		Registry: initReg,
+	}
+
+	cmd := NewServiceInstallCmd(deps)
+	cmd.Flags().String("config", "config.yaml", "")
+
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "install failed") {
+		t.Fatalf("expected install error, got %v", err)
+	}
+}
+
+func TestServiceInstallCmd_NoManager(t *testing.T) {
+	initReg := servicemanager.NewRegistry()
+	deps := &CommandDeps{Registry: initReg}
+	cmd := NewServiceInstallCmd(deps)
+	if err := cmd.Execute(); err == nil {
+		t.Error("expected error due to no manager, got nil")
+	}
+}
+
 func TestServiceStartCmd_Error(t *testing.T) {
 	initReg := servicemanager.NewRegistry()
 	// No services registered, Detect will fail

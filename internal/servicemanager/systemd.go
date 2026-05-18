@@ -21,6 +21,7 @@ var (
 	systemdServicePath = "/etc/systemd/system/grubstation.service"
 	osExecutable       = os.Executable
 	osWriteFile        = os.WriteFile
+	osRemove           = os.Remove
 	osGetuid           = os.Getuid
 	execCommand        = exec.CommandContext
 )
@@ -114,7 +115,7 @@ func (s *Systemd) Uninstall(ctx context.Context) error {
 	_ = execCommand(ctx, "systemctl", "stop", "grubstation.service").Run()
 	_ = execCommand(ctx, "systemctl", "disable", "grubstation.service").Run()
 
-	if err := os.Remove(systemdServicePath); err != nil && !os.IsNotExist(err) {
+	if err := osRemove(systemdServicePath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove systemd service file: %w", err)
 	}
 

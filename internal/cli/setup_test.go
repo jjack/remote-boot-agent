@@ -262,6 +262,17 @@ func TestSetupCmd_Execute(t *testing.T) {
 			wantInstall: false,
 			wantOut:     []string{"Setup aborted."},
 		},
+		{
+			name: "Success - Apply Only",
+			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem, resolver *mockSystemResolver) {
+				deps.Config = &config.Config{
+					HomeAssistant: config.HomeAssistantConfig{URL: "http://hass.local:8123", WebhookID: "fake"},
+				}
+			},
+			args:        []string{"--apply", "--config", "dummy.yaml"},
+			wantInstall: true,
+			wantOut:     []string{"Installation completed successfully."},
+		},
 	}
 
 	for _, tt := range tests {

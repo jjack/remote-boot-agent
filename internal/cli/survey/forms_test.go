@@ -538,6 +538,240 @@ func TestBuildWolSelectOptions_IPv6(t *testing.T) {
 	}
 }
 
+func TestGenerateConfigSurvey_DryRun(t *testing.T) {
+	t.Setenv("GRUBSTATION_SKIP_PORT_CHECK", "true")
+	t.Setenv("GRUBSTATION_SKIP_HA_URL_CHECK", "true")
+	ctx := context.Background()
+	in := tap.NewMockReadable()
+	out := tap.NewMockWritable()
+	tap.SetTermIO(in, out)
+	defer tap.SetTermIO(nil, nil)
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		// 1. Installation Mode: Select ModeDryRun (last option)
+		in.EmitKeypress("", tap.Key{Name: "down"})
+		in.EmitKeypress("", tap.Key{Name: "down"})
+		in.EmitKeypress("", tap.Key{Name: "down"})
+		in.EmitKeypress("", tap.Key{Name: "return"})
+		time.Sleep(50 * time.Millisecond)
+
+		// 2. Network Interface
+		in.EmitKeypress("", tap.Key{Name: "return"})
+		time.Sleep(50 * time.Millisecond)
+
+		// 3. Host Address
+		in.EmitKeypress("", tap.Key{Name: "return"})
+		time.Sleep(50 * time.Millisecond)
+
+		// 4. Daemon Port
+		in.EmitKeypress("", tap.Key{Name: "return"})
+		time.Sleep(50 * time.Millisecond)
+
+		// 5. WOL Address
+		in.EmitKeypress("", tap.Key{Name: "return"})
+		time.Sleep(50 * time.Millisecond)
+
+		// 6. GRUB Network Wait
+		in.EmitKeypress("", tap.Key{Name: "return"})
+		time.Sleep(50 * time.Millisecond)
+
+		// 7. HA URL (skipped if single URL) - but discovered HA mock returns 1 URL, so it's skipped.
+
+		// 8. HA Webhook
+		webhook := strings.Repeat("a", 64)
+		for _, r := range webhook {
+			in.EmitKeypress(string(r), tap.Key{})
+		}
+		in.EmitKeypress("", tap.Key{Name: "return"})
+	}()
+
+	deps := setupSurveyDeps(t)
+	cfg, isDryRun, err := generateConfigInteractive(ctx, deps, false, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !isDryRun {
+		t.Errorf("expected isDryRun to be true")
+	}
+	if cfg == nil {
+		t.Fatalf("expected cfg to not be nil")
+	}
+}
+
+func TestGenerateConfigSurvey_HookOnly(t *testing.T) {
+	t.Setenv("GRUBSTATION_SKIP_PORT_CHECK", "true")
+	t.Setenv("GRUBSTATION_SKIP_HA_URL_CHECK", "true")
+	ctx := context.Background()
+	in := tap.NewMockReadable()
+	out := tap.NewMockWritable()
+	tap.SetTermIO(in, out)
+	defer tap.SetTermIO(nil, nil)
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		// 1. Installation Mode: Select ModeHookOnly (third option)
+		in.EmitKeypress("", tap.Key{Name: "down"})
+		in.EmitKeypress("", tap.Key{Name: "down"})
+		in.EmitKeypress("", tap.Key{Name: "return"})
+		time.Sleep(50 * time.Millisecond)
+
+		// 2. Network Interface
+		in.EmitKeypress("", tap.Key{Name: "return"})
+		time.Sleep(50 * time.Millisecond)
+
+		// 3. Host Address
+		in.EmitKeypress("", tap.Key{Name: "return"})
+		time.Sleep(50 * time.Millisecond)
+
+		// 4. Daemon Port is SKIPPED in HookOnly mode
+
+		// 5. WOL Address
+		in.EmitKeypress("", tap.Key{Name: "return"})
+		time.Sleep(50 * time.Millisecond)
+
+		// 6. GRUB Network Wait
+		in.EmitKeypress("", tap.Key{Name: "return"})
+		time.Sleep(50 * time.Millisecond)
+
+		// 7. HA URL is skipped if single URL
+
+		// 8. HA Webhook
+		webhook := strings.Repeat("a", 64)
+		for _, r := range webhook {
+			in.EmitKeypress(string(r), tap.Key{})
+		}
+		in.EmitKeypress("", tap.Key{Name: "return"})
+	}()
+
+	deps := setupSurveyDeps(t)
+	cfg, isDryRun, err := generateConfigInteractive(ctx, deps, false, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if isDryRun {
+		t.Errorf("expected isDryRun to be false")
+	}
+	if cfg.Daemon.ReportBootOptions != true {
+		t.Errorf("expected ReportBootOptions to be true")
+	}
+}
+
+func TestGenerateConfigSurvey_NoGrub_DaemonShutdown(t *testing.T) {
+	t.Setenv("GRUBSTATION_SKIP_PORT_CHECK", "true")
+	t.Setenv("GRUBSTATION_SKIP_HA_URL_CHECK", "true")
+	ctx := context.Background()
+	in := tap.NewMockReadable()
+	out := tap.NewMockWritable()
+	tap.SetTermIO(in, out)
+	defer tap.SetTermIO(nil, nil)
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		// 1. Installation Mode: Select ModeDaemonShutdown (first option when no GRUB)
+		in.EmitKeypress("", tap.Key{Name: "return"})
+		time.Sleep(50 * time.Millisecond)
+
+		// 2. Network Interface
+		in.EmitKeypress("", tap.Key{Name: "return"})
+		time.Sleep(50 * time.Millisecond)
+
+		// 3. Host Address
+		in.EmitKeypress("", tap.Key{Name: "return"})
+		time.Sleep(50 * time.Millisecond)
+
+		// 4. Daemon Port
+		in.EmitKeypress("", tap.Key{Name: "return"})
+		time.Sleep(50 * time.Millisecond)
+
+		// 5. WOL Address
+		in.EmitKeypress("", tap.Key{Name: "return"})
+		time.Sleep(50 * time.Millisecond)
+
+		// 6. GRUB Network Wait is SKIPPED because reportsBoot is false
+
+		// 7. HA URL is skipped if single URL
+
+		// 8. HA Webhook
+		webhook := strings.Repeat("a", 64)
+		for _, r := range webhook {
+			in.EmitKeypress(string(r), tap.Key{})
+		}
+		in.EmitKeypress("", tap.Key{Name: "return"})
+	}()
+
+	deps := setupSurveyDeps(t)
+	deps.resolver.discoverGrubConfigFunc = func(ctx context.Context) (string, error) { return "", nil }
+	cfg, isDryRun, err := generateConfigInteractive(ctx, deps, false, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if isDryRun {
+		t.Errorf("expected isDryRun to be false")
+	}
+	if cfg.Daemon.ReportBootOptions {
+		t.Errorf("expected ReportBootOptions to be false")
+	}
+}
+
+func TestGenerateConfigSurvey_HA_Selection_Other(t *testing.T) {
+	t.Setenv("GRUBSTATION_SKIP_PORT_CHECK", "true")
+	t.Setenv("GRUBSTATION_SKIP_HA_URL_CHECK", "true")
+	ctx := context.Background()
+	in := tap.NewMockReadable()
+	out := tap.NewMockWritable()
+	tap.SetTermIO(in, out)
+	defer tap.SetTermIO(nil, nil)
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		for i := 0; i < 6; i++ {
+			in.EmitKeypress("", tap.Key{Name: "return"})
+			time.Sleep(50 * time.Millisecond)
+		}
+
+		// 7. HA Instance Selection: Select "Other" (second option here since 1 discovered)
+		in.EmitKeypress("", tap.Key{Name: "down"})
+		in.EmitKeypress("", tap.Key{Name: "return"})
+		time.Sleep(50 * time.Millisecond)
+
+		// 7.1 HA URL: Type manually
+		haURL := "http://other.ha:8123"
+		for _, r := range haURL {
+			in.EmitKeypress(string(r), tap.Key{})
+		}
+		in.EmitKeypress("", tap.Key{Name: "return"})
+		time.Sleep(50 * time.Millisecond)
+
+		// 8. HA Webhook
+		webhook := strings.Repeat("a", 64)
+		for _, r := range webhook {
+			in.EmitKeypress(string(r), tap.Key{})
+		}
+		in.EmitKeypress("", tap.Key{Name: "return"})
+	}()
+
+	deps := setupSurveyDeps(t)
+	// mock returns 1 instance with 2 URLs, so totalURLs=2, triggering selection
+	deps.resolver.discoverHomeAssistantFunc = func(ctx context.Context) ([]homeassistant.ServiceInstance, error) {
+		return []homeassistant.ServiceInstance{
+			{Name: "Home", URLs: []string{"http://ha.local:8123", "http://ha.remote:8123"}},
+		}, nil
+	}
+
+	cfg, _, err := generateConfigInteractive(ctx, deps, false, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.HomeAssistant.URL != "http://other.ha:8123" {
+		t.Errorf("expected http://other.ha:8123, got %s", cfg.HomeAssistant.URL)
+	}
+}
+
 func TestValidatePort_ReinstallDifferent(t *testing.T) {
 	t.Setenv("GRUBSTATION_SKIP_PORT_CHECK", "true")
 	err := validatePort("8082", true, 8081)

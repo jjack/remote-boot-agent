@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 )
 
@@ -71,9 +72,13 @@ func TestSystemd(t *testing.T) {
 	})
 
 	t.Run("Uninstall", func(t *testing.T) {
+		oldRemove := osRemove
+		defer func() { osRemove = oldRemove }()
+
 		systemdServicePath = t.TempDir() + "/svc"
 		_ = os.WriteFile(systemdServicePath, []byte(""), 0o644)
 
+		osRemove = os.Remove
 		execCommand = func(ctx context.Context, name string, arg ...string) *exec.Cmd {
 			return exec.Command("true")
 		}
@@ -81,6 +86,13 @@ func TestSystemd(t *testing.T) {
 		if err := s.Uninstall(context.Background()); err != nil {
 			t.Errorf("Uninstall failed: %v", err)
 		}
+
+		// Remove fail
+		osRemove = func(name string) error { return errors.New("remove fail") }
+		if err := s.Uninstall(context.Background()); err == nil || !strings.Contains(err.Error(), "failed to remove systemd service file") {
+			t.Errorf("expected remove error, got %v", err)
+		}
+		osRemove = os.Remove
 
 		// Reload fail
 		execCommand = func(ctx context.Context, name string, arg ...string) *exec.Cmd {

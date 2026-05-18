@@ -18,9 +18,9 @@ func TestDiscover_Success(t *testing.T) {
 		return nil, nil // Return no interfaces to force a single global query
 	}
 
-	oldQuery := mdnsQuery
-	defer func() { mdnsQuery = oldQuery }()
-	mdnsQuery = func(params *mdns.QueryParam) error {
+	oldQuery := MdnsQueryContext
+	defer func() { MdnsQueryContext = oldQuery }()
+	MdnsQueryContext = func(ctx context.Context, params *mdns.QueryParam) error {
 		params.Entries <- &mdns.ServiceEntry{
 			Name:       "Home." + homeAssistantService,
 			AddrV4:     net.ParseIP("192.168.1.100"),

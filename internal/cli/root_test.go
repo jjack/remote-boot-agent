@@ -8,7 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/mdns"
 	"github.com/jjack/grubstation/internal/config"
+	"github.com/jjack/grubstation/internal/homeassistant"
 )
 
 func TestDefaultSystemResolver(t *testing.T) {
@@ -16,8 +18,15 @@ func TestDefaultSystemResolver(t *testing.T) {
 	var _ SystemResolver = (*DefaultSystemResolver)(nil)
 	resolver := &DefaultSystemResolver{}
 
-	// Short timeout so DiscoverHomeAssistant doesn't delay tests with mDNS
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	// Mock mDNS to avoid hangs/network calls
+	oldMdns := homeassistant.MdnsQueryContext
+	defer func() { homeassistant.MdnsQueryContext = oldMdns }()
+	homeassistant.MdnsQueryContext = func(ctx context.Context, params *mdns.QueryParam) error {
+		return nil
+	}
+
+	// Short timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
 	// These are pass-throughs to the real system packages.

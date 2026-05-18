@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	mdnsQuery = mdns.Query
+	MdnsQueryContext = mdns.QueryContext
 )
 
 func Discover(ctx context.Context) ([]ServiceInstance, error) {
@@ -67,20 +67,23 @@ func Discover(ctx context.Context) ([]ServiceInstance, error) {
 	}
 
 	// First, try a global query
-	_ = mdnsQuery(params)
+	_ = MdnsQueryContext(ctx, params)
 
 	// If we found nothing, try specific interfaces as a fallback
 	if len(instances) == 0 {
 		if ifaces, err := netInterfaces(); err == nil {
 			var queryWg sync.WaitGroup
 			for _, inf := range ifaces {
+				if ctx.Err() != nil {
+					break
+				}
 				if inf.Flags&net.FlagUp != 0 && inf.Flags&net.FlagMulticast != 0 && inf.Flags&net.FlagLoopback == 0 {
 					queryWg.Add(1)
 					go func(iface net.Interface) {
 						defer queryWg.Done()
 						ifaceParams := *params
 						ifaceParams.Interface = &iface
-						_ = mdnsQuery(&ifaceParams)
+						_ = MdnsQueryContext(ctx, &ifaceParams)
 					}(inf)
 				}
 			}

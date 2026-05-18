@@ -314,6 +314,9 @@ func TestGrub_Uninstall_Grub2Mkconfig(t *testing.T) {
 }
 
 func TestGrub_Uninstall_UpdateGrubError(t *testing.T) {
+	tempDir := t.TempDir()
+	fakeScriptPath := filepath.Join(tempDir, "99_grubstation")
+
 	oldPath := HassGrubStationPath
 	oldExecLookPath := ExecLookPath
 	oldExecCommand := ExecCommand
@@ -323,6 +326,7 @@ func TestGrub_Uninstall_UpdateGrubError(t *testing.T) {
 		ExecCommand = oldExecCommand
 	}()
 
+	HassGrubStationPath = fakeScriptPath
 	ExecLookPath = func(file string) (string, error) {
 		if file == "update-grub" {
 			return "/bin/false", nil
@@ -341,6 +345,9 @@ func TestGrub_Uninstall_UpdateGrubError(t *testing.T) {
 }
 
 func TestGrub_Uninstall_Grub2MkconfigError(t *testing.T) {
+	tempDir := t.TempDir()
+	fakeScriptPath := filepath.Join(tempDir, "99_grubstation")
+
 	oldPath := HassGrubStationPath
 	oldExecLookPath := ExecLookPath
 	oldExecCommand := ExecCommand
@@ -350,6 +357,7 @@ func TestGrub_Uninstall_Grub2MkconfigError(t *testing.T) {
 		ExecCommand = oldExecCommand
 	}()
 
+	HassGrubStationPath = fakeScriptPath
 	ExecLookPath = func(file string) (string, error) {
 		if file == "grub2-mkconfig" {
 			return "/bin/false", nil
