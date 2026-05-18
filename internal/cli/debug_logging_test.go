@@ -115,10 +115,10 @@ type mockHandler struct {
 	handle  func(slog.Record) error
 }
 
-func (m *mockHandler) Enabled(_ context.Context, l slog.Level) bool { return m.enabled(l) }
-func (m *mockHandler) Handle(_ context.Context, r slog.Record) error  { return m.handle(r) }
-func (m *mockHandler) WithAttrs(_ []slog.Attr) slog.Handler        { return m }
-func (m *mockHandler) WithGroup(_ string) slog.Handler            { return m }
+func (m *mockHandler) Enabled(_ context.Context, l slog.Level) bool  { return m.enabled(l) }
+func (m *mockHandler) Handle(_ context.Context, r slog.Record) error { return m.handle(r) }
+func (m *mockHandler) WithAttrs(_ []slog.Attr) slog.Handler          { return m }
+func (m *mockHandler) WithGroup(_ string) slog.Handler               { return m }
 
 func TestSetupDebugLogging(t *testing.T) {
 	// We need to be careful with global state here.
@@ -139,23 +139,23 @@ func TestSetupDebugLogging(t *testing.T) {
 		// Instead of os.Pipe, we'll just check if the file is created.
 		// To avoid cluttering stderr during tests, we can temporarily redirect it to a dummy file
 		// but since we want to avoid hangs, we'll just not capture it and trust the return.
-		
+
 		dump := setupDebugLogging()
 		slog.Info("test log message")
 
 		// Create a temp file to capture stderr if we really want to, but let's try WITHOUT it first
 		// to see if the hang was indeed os.Pipe
-		
+
 		err := errors.New("test error")
-		
+
 		// To avoid printing to real stderr during tests, we can swap it with a simple file
 		f, _ := os.CreateTemp("", "stderr-capture-*.log")
 		defer os.Remove(f.Name())
 		oldStderr := os.Stderr
 		os.Stderr = f
-		
+
 		dump(err)
-		
+
 		os.Stderr = oldStderr
 		f.Close()
 
