@@ -150,14 +150,14 @@ func TestSetupDebugLogging(t *testing.T) {
 
 		// To avoid printing to real stderr during tests, we can swap it with a simple file
 		f, _ := os.CreateTemp("", "stderr-capture-*.log")
-		defer os.Remove(f.Name())
+		defer func() { _ = os.Remove(f.Name()) }()
 		oldStderr := os.Stderr
 		os.Stderr = f
 
 		dump(err)
 
 		os.Stderr = oldStderr
-		f.Close()
+		_ = f.Close()
 
 		// Read the captured stderr
 		captured, _ := os.ReadFile(f.Name())
@@ -178,7 +178,7 @@ func TestSetupDebugLogging(t *testing.T) {
 				if !strings.Contains(string(content), "test log message") {
 					t.Errorf("expected log file to contain message, got: %s", string(content))
 				}
-				os.Remove(lastLine)
+				_ = os.Remove(lastLine)
 			} else {
 				// Maybe it's on a different line?
 				found := false
@@ -187,7 +187,7 @@ func TestSetupDebugLogging(t *testing.T) {
 						content, _ := os.ReadFile(line)
 						if strings.Contains(string(content), "test log message") {
 							found = true
-							os.Remove(line)
+							_ = os.Remove(line)
 							break
 						}
 					}

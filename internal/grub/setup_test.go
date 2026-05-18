@@ -404,7 +404,7 @@ func TestGrub_CheckDrift(t *testing.T) {
 	if err := os.Mkdir(HassGrubStationPath, 0o000); err != nil {
 		t.Fatalf("failed to create unreadable directory: %v", err)
 	}
-	defer os.Chmod(HassGrubStationPath, 0o755) // Clean up
+	defer func() { _ = os.Chmod(HassGrubStationPath, 0o755) }() // Clean up
 
 	_, err = g.CheckDrift(opts)
 	if err == nil {

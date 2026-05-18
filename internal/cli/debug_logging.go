@@ -91,7 +91,7 @@ func setupDebugLogging() (dumpFunc func(err error)) {
 			fmt.Fprintf(os.Stderr, "\nFailed to create debug log file: %v\n", createErr)
 			return
 		}
-		defer tmpFile.Close()
+		defer func() { _ = tmpFile.Close() }()
 
 		if _, writeErr := tmpFile.Write(buf.Bytes()); writeErr != nil {
 			fmt.Fprintf(os.Stderr, "\nFailed to write to debug log file: %v\n", writeErr)
