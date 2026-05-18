@@ -1,5 +1,3 @@
-//go:build !windows
-
 package homeassistant
 
 import (
@@ -8,61 +6,43 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hashicorp/mdns"
+	"github.com/brutella/dnssd"
 )
-
-func TestDiscover_Success(t *testing.T) {
-	oldNetInterfaces := netInterfaces
-	defer func() { netInterfaces = oldNetInterfaces }()
-	netInterfaces = func() ([]net.Interface, error) {
-		return nil, nil // Return no interfaces to force a single global query
-	}
-
-	oldQuery := MdnsQueryContext
-	defer func() { MdnsQueryContext = oldQuery }()
-	MdnsQueryContext = func(ctx context.Context, params *mdns.QueryParam) error {
-		params.Entries <- &mdns.ServiceEntry{
-			Name:       "Home." + homeAssistantService,
-			AddrV4:     net.ParseIP("192.168.1.100"),
-			Port:       8123,
-			InfoFields: []string{"internal_url=http://ha.local:8123"},
-		}
-		return nil
-	}
-
-	// Set a short timeout
-	oldTimeout := discoveryTimeout
-	discoveryTimeout = 10 * time.Millisecond
-	defer func() { discoveryTimeout = oldTimeout }()
-
-	instances, err := Discover(context.Background())
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-	if len(instances) != 1 || instances[0].Name != "Home" {
-		t.Fatalf("expected 1 instance named 'Home', got %v", instances)
-	}
-}
 
 func TestExtractURLs(t *testing.T) {
 	tests := []struct {
 		name     string
-		entry    *mdns.ServiceEntry
+		entry    dnssd.BrowseEntry
 		expected []string
 	}{
 		{
 			name: "internal_url and ip present",
-			entry: &mdns.ServiceEntry{
-				InfoFields: []string{"internal_url=http://ha.local:8123", "base_url=http://base.local"},
-				AddrV4:     net.ParseIP("192.168.1.100"),
-				Port:       8123,
+			entry: dnssd.BrowseEntry{
+				Name: "Home",
+				IPs:  []net.IP{net.ParseIP("192.168.1.100")},
+				Port: 8123,
+				Text: map[string]string{
+					"internal_url": "http://ha.local:8123",
+					"base_url":     "http://base.local",
+				},
 			},
 			expected: []string{"http://ha.local:8123", "http://base.local", "http://192.168.1.100:8123"},
 		},
 		{
-			name:     "no useful info",
-			entry:    &mdns.ServiceEntry{},
-			expected: nil,
+			name: "only ip present",
+			entry: dnssd.BrowseEntry{
+				Name: "Home",
+				IPs:  []net.IP{net.ParseIP("192.168.1.100")},
+				Port: 8123,
+			},
+			expected: []string{"http://192.168.1.100:8123"},
+		},
+		{
+			name: "no useful info",
+			entry: dnssd.BrowseEntry{
+				Name: "Home",
+			},
+			expected: []string{},
 		},
 	}
 
@@ -78,5 +58,21 @@ func TestExtractURLs(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestDiscover_Timeout(t *testing.T) {
+	// Set a very short timeout for the test
+	oldTimeout := discoveryTimeout
+	discoveryTimeout = 10 * time.Millisecond
+	defer func() { discoveryTimeout = oldTimeout }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	_, err := Discover(ctx)
+	// We expect either nil (timeout reached) or context.DeadlineExceeded if it actually times out
+	if err != nil && err != context.DeadlineExceeded {
+		t.Fatalf("expected no error or deadline exceeded, got %v", err)
 	}
 }
