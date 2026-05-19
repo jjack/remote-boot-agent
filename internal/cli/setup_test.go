@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jjack/grubstation/internal/cli/survey"
+	"github.com/jjack/grubstation/internal/cli/wizard"
 	"github.com/jjack/grubstation/internal/config"
 	"github.com/jjack/grubstation/internal/grub"
 	"github.com/jjack/grubstation/internal/homeassistant"
@@ -50,9 +50,9 @@ func (m *mockInstallInitSystem) Start(ctx context.Context) error     { return m.
 func (m *mockInstallInitSystem) Stop(ctx context.Context) error      { return nil }
 
 func TestSetupCmd_Execute(t *testing.T) {
-	oldRunGenerateSurvey := survey.RunGenerateSurvey
+	oldRunGenerateSurvey := wizard.RunGenerateSurvey
 	defer func() {
-		survey.RunGenerateSurvey = oldRunGenerateSurvey
+		wizard.RunGenerateSurvey = oldRunGenerateSurvey
 	}()
 
 	oldOsMkdirAll := osMkdirAll
@@ -79,7 +79,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 				tempGrub := t.TempDir() + "/grub.cfg"
 				_ = os.WriteFile(tempGrub, []byte(""), 0o644)
 				deps.Grub = &grub.Grub{ConfigPath: tempGrub}
-				survey.RunGenerateSurvey = func(ctx context.Context, deps survey.SurveyDeps, isReinstall bool, currentPort int) (*config.Config, bool, error) {
+				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int) (*config.Config, bool, error) {
 					return &config.Config{
 						HomeAssistant: config.HomeAssistantConfig{URL: ts.URL, WebhookID: "fake"},
 					}, false, nil
@@ -97,7 +97,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 				tempGrub := t.TempDir() + "/grub.cfg"
 				_ = os.WriteFile(tempGrub, []byte(""), 0o644)
 				deps.Grub = &grub.Grub{ConfigPath: tempGrub}
-				survey.RunGenerateSurvey = func(ctx context.Context, deps survey.SurveyDeps, isReinstall bool, currentPort int) (*config.Config, bool, error) {
+				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int) (*config.Config, bool, error) {
 					return &config.Config{}, true, nil
 				}
 			},
@@ -123,7 +123,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 				tempGrub := t.TempDir() + "/grub.cfg"
 				_ = os.WriteFile(tempGrub, []byte(""), 0o644)
 				deps.Grub = &grub.Grub{ConfigPath: tempGrub}
-				survey.RunGenerateSurvey = func(ctx context.Context, deps survey.SurveyDeps, isReinstall bool, currentPort int) (*config.Config, bool, error) {
+				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int) (*config.Config, bool, error) {
 					return nil, false, errors.New("survey failed")
 				}
 			},
@@ -136,7 +136,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 				tempGrub := t.TempDir() + "/grub.cfg"
 				_ = os.WriteFile(tempGrub, []byte(""), 0o644)
 				deps.Grub = &grub.Grub{ConfigPath: tempGrub}
-				survey.RunGenerateSurvey = func(ctx context.Context, deps survey.SurveyDeps, isReinstall bool, currentPort int) (*config.Config, bool, error) {
+				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int) (*config.Config, bool, error) {
 					return &config.Config{}, false, nil
 				}
 				osMkdirAll = func(path string, perm os.FileMode) error { return errors.New("mkdirall failed") }
@@ -151,7 +151,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 				tempGrub := t.TempDir() + "/grub.cfg"
 				_ = os.WriteFile(tempGrub, []byte(""), 0o644)
 				deps.Grub = &grub.Grub{ConfigPath: tempGrub}
-				survey.RunGenerateSurvey = func(ctx context.Context, deps survey.SurveyDeps, isReinstall bool, currentPort int) (*config.Config, bool, error) {
+				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int) (*config.Config, bool, error) {
 					return &config.Config{}, false, nil
 				}
 				resolver.saveConfigFunc = func(cfg *config.Config, path string) error {
@@ -167,7 +167,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 				tempGrub := t.TempDir() + "/grub.cfg"
 				_ = os.WriteFile(tempGrub, []byte(""), 0o644)
 				deps.Grub = &grub.Grub{ConfigPath: tempGrub} // will fail since not mocked correctly
-				survey.RunGenerateSurvey = func(ctx context.Context, deps survey.SurveyDeps, isReinstall bool, currentPort int) (*config.Config, bool, error) {
+				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int) (*config.Config, bool, error) {
 					return &config.Config{
 						Daemon: config.DaemonConfig{ReportBootOptions: true},
 					}, false, nil
@@ -205,7 +205,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 				_ = os.WriteFile(tempGrub, []byte("menuentry 'OS' {}"), 0o644)
 				deps.Grub = &grub.Grub{ConfigPath: tempGrub}
 
-				survey.RunGenerateSurvey = func(ctx context.Context, deps survey.SurveyDeps, isReinstall bool, currentPort int) (*config.Config, bool, error) {
+				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int) (*config.Config, bool, error) {
 					return &config.Config{
 						HomeAssistant: config.HomeAssistantConfig{URL: ts.URL, WebhookID: "fake"},
 					}, false, nil
@@ -239,7 +239,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 				// Make GetBootOptions fail to trigger error in PushBootOptions
 				deps.Grub = &grub.Grub{ConfigPath: "/non/existent/path"}
 
-				survey.RunGenerateSurvey = func(ctx context.Context, deps survey.SurveyDeps, isReinstall bool, currentPort int) (*config.Config, bool, error) {
+				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int) (*config.Config, bool, error) {
 					return &config.Config{
 						HomeAssistant: config.HomeAssistantConfig{URL: "http://fake", WebhookID: "fake"},
 					}, false, nil
@@ -255,8 +255,8 @@ func TestSetupCmd_Execute(t *testing.T) {
 		{
 			name: "Setup Aborted on Overwrite No",
 			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem, resolver *mockSystemResolver) {
-				survey.RunGenerateSurvey = func(ctx context.Context, deps survey.SurveyDeps, isReinstall bool, currentPort int) (*config.Config, bool, error) {
-					return nil, false, survey.ErrAborted
+				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int) (*config.Config, bool, error) {
+					return nil, false, wizard.ErrAborted
 				}
 			},
 			wantInstall: false,
@@ -278,9 +278,9 @@ func TestSetupCmd_Execute(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Prevent mock bleed across test iterations
-			origRunGenerateSurvey := survey.RunGenerateSurvey
+			origRunGenerateSurvey := wizard.RunGenerateSurvey
 			defer func() {
-				survey.RunGenerateSurvey = origRunGenerateSurvey
+				wizard.RunGenerateSurvey = origRunGenerateSurvey
 			}()
 
 			initMock := &mockInstallInitSystem{}

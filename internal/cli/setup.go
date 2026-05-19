@@ -10,7 +10,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/jjack/grubstation/internal/cli/survey"
+	"github.com/jjack/grubstation/internal/cli/wizard"
 	"github.com/jjack/grubstation/internal/config"
 	"github.com/jjack/grubstation/internal/grub"
 	"github.com/jjack/grubstation/internal/reporter"
@@ -137,7 +137,7 @@ type surveyDepsAdapter struct {
 	deps *CommandDeps
 }
 
-func (a surveyDepsAdapter) GetSystemResolver() survey.SystemResolver {
+func (a surveyDepsAdapter) GetSystemResolver() wizard.SystemResolver {
 	return a.deps.SystemResolver
 }
 
@@ -214,9 +214,9 @@ func NewSetupCmd(deps *CommandDeps) *cobra.Command {
 
 			tap.Intro("GrubStation Setup")
 
-			cfg, isDryRun, err := survey.RunGenerateSurvey(cmd.Context(), surveyDepsAdapter{deps: deps}, true, currentPort)
+			cfg, isDryRun, err := wizard.RunGenerateSurvey(cmd.Context(), surveyDepsAdapter{deps: deps}, true, currentPort)
 			if err != nil {
-				if errors.Is(err, survey.ErrAborted) {
+				if errors.Is(err, wizard.ErrAborted) {
 					tap.Message("Setup aborted.")
 					tap.Outro("Goodbye!")
 					return nil
