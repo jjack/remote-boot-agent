@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.1](https://github.com/jjack/grubstation/compare/v1.7.0...v1.7.1) (2026-05-19)
+
+
+### Bug Fixes
+
+* ensuring "config init -o config.yaml" doesn't require sudo access. also fleshing out sample config files ([41020c5](https://github.com/jjack/grubstation/commit/41020c54351ff313a579f35afcc89cafb6114b04))
+* making sure that "service status" uses the /status endpoint, not /healthcheck ([18fcb57](https://github.com/jjack/grubstation/commit/18fcb57de9e7d5445226b90921464ee89502fc46))
+
 ## [1.7.0](https://github.com/jjack/grubstation/compare/v1.6.1...v1.7.0) (2026-05-18)
 
 
