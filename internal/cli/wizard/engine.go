@@ -86,10 +86,6 @@ func BuildWolOptions(ips []string, ipBroadcasts map[string]string) []tap.SelectO
 			continue
 		}
 
-		if net.ParseIP(bc).To4() == nil {
-			continue
-		}
-
 		if !seenBroadcasts[bc] {
 			seenBroadcasts[bc] = true
 			opts = append(opts, tap.SelectOption[string]{

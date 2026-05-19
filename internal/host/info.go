@@ -63,8 +63,8 @@ func GetWOLInterfaces() ([]net.Interface, error) {
 }
 
 func getLastIP(ipnet *net.IPNet) net.IP {
-	ipv4 := ipnet.IP.To4()
-	if ipv4 == nil {
+	ip := ipnet.IP.To4()
+	if ip == nil {
 		return nil // IPv6 doesn't use subnet broadcasts for WOL
 	}
 
@@ -80,12 +80,12 @@ func getLastIP(ipnet *net.IPNet) net.IP {
 
 	last := make(net.IP, 4)
 	for i := 0; i < 4; i++ {
-		last[i] = ipv4[i] | ^mask[i]
+		last[i] = ip[i] | ^mask[i]
 	}
 	return last
 }
 
-// GetIPInfo returns a list of IP addresses (IPv4 and IPv6) and a map of those addresses to their computed broadcast address (for IPv4).
+// GetIPInfo returns a list of IPv4 addresses and a map of those addresses to their computed broadcast address.
 func GetIPInfo(inf net.Interface) ([]string, map[string]string) {
 	var ips []string
 	broadcasts := make(map[string]string)
@@ -98,15 +98,14 @@ func GetIPInfo(inf net.Interface) ([]string, map[string]string) {
 	for _, addr := range addrs {
 		if ipnet, ok := addr.(*net.IPNet); ok {
 			ipv4 := ipnet.IP.To4()
-			ip := ipv4
 			if ipv4 == nil {
-				ip = ipnet.IP // IPv6
+				continue // Skip IPv6
 			}
 
-			ips = append(ips, ip.String())
+			ips = append(ips, ipv4.String())
 
 			if broadcast := getLastIP(ipnet); broadcast != nil {
-				broadcasts[ip.String()] = broadcast.String()
+				broadcasts[ipv4.String()] = broadcast.String()
 			}
 		}
 	}

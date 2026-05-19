@@ -64,10 +64,10 @@ func TestBuildIfaceOptions_Pure(t *testing.T) {
 }
 
 func TestBuildHostOptions(t *testing.T) {
-	opts := BuildHostOptions("my-host", "my-host.local", []string{"192.168.1.50", "fd00::1"})
+	opts := BuildHostOptions("my-host", "my-host.local", []string{"192.168.1.50"})
 
-	if len(opts) != 4 {
-		t.Fatalf("expected 4 options, got %d", len(opts))
+	if len(opts) != 3 {
+		t.Fatalf("expected 3 options, got %d", len(opts))
 	}
 	if opts[0].Value != "my-host.local" {
 		t.Errorf("expected option 0 value to be my-host.local")
@@ -221,15 +221,6 @@ func TestBuildWolOptions_Extra(t *testing.T) {
 	t.Run("no broadcast for ip", func(t *testing.T) {
 		ips := []string{"192.168.1.50"}
 		broadcasts := map[string]string{}
-		opts := BuildWolOptions(ips, broadcasts)
-		if len(opts) != 1 {
-			t.Errorf("expected 1 option (default), got %d", len(opts))
-		}
-	})
-
-	t.Run("ipv6 broadcast (ignored)", func(t *testing.T) {
-		ips := []string{"fd00::1"}
-		broadcasts := map[string]string{"fd00::1": "ff02::1"}
 		opts := BuildWolOptions(ips, broadcasts)
 		if len(opts) != 1 {
 			t.Errorf("expected 1 option (default), got %d", len(opts))

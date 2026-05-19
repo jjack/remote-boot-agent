@@ -57,7 +57,7 @@ func (m *mockSystemResolver) GetIPInfo(inf net.Interface) ([]string, map[string]
 	if m.getIPInfoFunc != nil {
 		return m.getIPInfoFunc(inf)
 	}
-	return []string{"192.168.1.100", "fd00::1"}, map[string]string{"192.168.1.100": "192.168.1.255"}
+	return []string{"192.168.1.100"}, map[string]string{"192.168.1.100": "192.168.1.255"}
 }
 
 func (m *mockSystemResolver) GetFQDN(hostname string) string {

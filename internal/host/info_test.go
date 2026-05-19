@@ -172,6 +172,34 @@ func TestGetIPv4Info(t *testing.T) {
 	}
 }
 
+func TestGetIPInfo_FiltersIPv6(t *testing.T) {
+	oldGetAddrs := getAddrs
+	defer func() { getAddrs = oldGetAddrs }()
+
+	getAddrs = func(iface net.Interface) ([]net.Addr, error) {
+		ip4, ipv4net, _ := net.ParseCIDR("192.168.1.50/24")
+		ipv4net.IP = ip4
+		_, ipv6net, _ := net.ParseCIDR("fd00::1/64")
+		return []net.Addr{ipv4net, ipv6net}, nil
+	}
+
+	ips, _ := GetIPInfo(net.Interface{Name: "eth0"})
+	if len(ips) != 1 {
+		t.Errorf("expected 1 ip, got %d (%v)", len(ips), ips)
+	}
+	if ips[0] != "192.168.1.50" {
+		t.Errorf("expected 192.168.1.50, got %s", ips[0])
+	}
+}
+
+func TestGetLastIP_IPv6(t *testing.T) {
+	_, ipv6net, _ := net.ParseCIDR("fd00::1/64")
+	last := getLastIP(ipv6net)
+	if last != nil {
+		t.Errorf("expected nil for IPv6, got %v", last)
+	}
+}
+
 func TestGetIPv4Info_Error(t *testing.T) {
 	oldGetAddrs := getAddrs
 	defer func() { getAddrs = oldGetAddrs }()
@@ -186,25 +214,6 @@ func TestGetIPv4Info_Error(t *testing.T) {
 	}
 	if len(broadcasts) != 0 {
 		t.Errorf("expected no broadcasts on error, got %v", broadcasts)
-	}
-}
-
-func TestGetIPv4Info_IPv6(t *testing.T) {
-	oldGetAddrs := getAddrs
-	defer func() { getAddrs = oldGetAddrs }()
-
-	getAddrs = func(iface net.Interface) ([]net.Addr, error) {
-		ip, ipnet, _ := net.ParseCIDR("2001:db8::1/64")
-		ipnet.IP = ip
-		return []net.Addr{ipnet}, nil
-	}
-
-	ips, broadcasts := GetIPInfo(net.Interface{Name: "eth0"})
-	if len(ips) != 1 || ips[0] != "2001:db8::1" {
-		t.Errorf("expected ips to contain 2001:db8::1, got %v", ips)
-	}
-	if broadcasts["2001:db8::1"] != "" {
-		t.Errorf("expected NO broadcast to be calculated for IPv6")
 	}
 }
 
