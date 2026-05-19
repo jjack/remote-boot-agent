@@ -504,6 +504,20 @@ func TestIsInstalled(t *testing.T) {
 	}
 }
 
+func TestIsInstalled_NoSupport(t *testing.T) {
+	deps := &CommandDeps{
+		Registry: servicemanager.NewRegistry(), // Empty registry
+	}
+
+	installed, err := IsInstalled(context.Background(), deps)
+	if err == nil {
+		t.Error("expected error, got nil")
+	}
+	if installed {
+		t.Error("expected installed to be false")
+	}
+}
+
 func TestPerformInstall_NonRoot(t *testing.T) {
 	cfg := &config.Config{}
 	initReg := servicemanager.NewRegistry()
@@ -521,6 +535,41 @@ func TestPerformInstall_NonRoot(t *testing.T) {
 	err := performInstall(cmd, deps, "config.yaml", "")
 	if err == nil || !strings.Contains(err.Error(), "need root") {
 		t.Errorf("expected permission error, got %v", err)
+	}
+}
+
+func TestPerformInstall_NoManager(t *testing.T) {
+	deps := &CommandDeps{
+		Registry: servicemanager.NewRegistry(), // Empty registry
+	}
+
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+	err := performInstall(cmd, deps, "config.yaml", "")
+	if err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
+func TestPerformInstall_NoReportBootOptions(t *testing.T) {
+	cfg := &config.Config{
+		Daemon: config.DaemonConfig{ReportBootOptions: false},
+	}
+
+	initMock := &mockInstallInitSystem{}
+	initReg := servicemanager.NewRegistry()
+	initReg.Register("mock-init", func() servicemanager.Manager { return initMock })
+
+	deps := &CommandDeps{
+		Config:   cfg,
+		Registry: initReg,
+	}
+
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+	err := performInstall(cmd, deps, "config.yaml", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

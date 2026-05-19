@@ -14,6 +14,7 @@ const homeAssistantService = "_home-assistant._tcp.local."
 
 var (
 	discoveryTimeout = 5 * time.Second
+	lookupType       = dnssd.LookupType
 )
 
 type ServiceInstance struct {
@@ -45,8 +46,8 @@ func Discover(ctx context.Context) ([]ServiceInstance, error) {
 		}
 	}
 
-	// dnssd.LookupType blocks until context is cancelled
-	err := dnssd.LookupType(ctx, homeAssistantService, add, func(e dnssd.BrowseEntry) {})
+	// lookupType blocks until context is cancelled
+	err := lookupType(ctx, homeAssistantService, add, func(e dnssd.BrowseEntry) {})
 	if err != nil && err != context.Canceled && err != context.DeadlineExceeded {
 		return nil, fmt.Errorf("dnssd lookup failed: %w", err)
 	}

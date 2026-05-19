@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strconv"
 	"strings"
@@ -777,5 +779,104 @@ func TestValidatePort_ReinstallDifferent(t *testing.T) {
 	err := validatePort("8082", true, 8081)
 	if err != nil {
 		t.Errorf("expected no error with skip check, got %v", err)
+	}
+}
+
+func TestGenerateConfigSurvey_HostnameError(t *testing.T) {
+	ctx := context.Background()
+	deps := setupSurveyDeps(t)
+	deps.resolver.detectSystemHostnameFunc = func() (string, error) {
+		return "", errors.New("hostname error")
+	}
+
+	_, _, err := generateConfigInteractive(ctx, deps, false, 0)
+	if err == nil || !strings.Contains(err.Error(), "hostname error") {
+		t.Errorf("expected hostname error, got %v", err)
+	}
+}
+
+func TestGenerateConfigSurvey_InterfacesError(t *testing.T) {
+	ctx := context.Background()
+	deps := setupSurveyDeps(t)
+	deps.resolver.getWOLInterfacesFunc = func() ([]net.Interface, error) {
+		return nil, errors.New("interfaces error")
+	}
+
+	_, _, err := generateConfigInteractive(ctx, deps, false, 0)
+	if err == nil || !strings.Contains(err.Error(), "interfaces error") {
+		t.Errorf("expected interfaces error, got %v", err)
+	}
+}
+
+func TestGenerateConfigSurvey_ContextCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	deps := setupSurveyDeps(t)
+	_, _, err := generateConfigInteractive(ctx, deps, false, 0)
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("expected context.Canceled, got %v", err)
+	}
+}
+
+func TestGenerateConfigSurvey_ManualURL_ConnectionError(t *testing.T) {
+	os.Unsetenv("GRUBSTATION_SKIP_HA_URL_CHECK")
+	ctx := context.Background()
+	in := tap.NewMockReadable()
+	out := tap.NewMockWritable()
+	tap.SetTermIO(in, out)
+	defer tap.SetTermIO(nil, nil)
+
+	// Start a real test server for the success case
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		// 1-6. Standard selections
+		for i := 0; i < 6; i++ {
+			in.EmitKeypress("", tap.Key{Name: "return"})
+			time.Sleep(50 * time.Millisecond)
+		}
+
+		// 7. HA URL: Type an invalid URL first (no server listening on port 1)
+		invalidURL := "http://127.0.0.1:1"
+		for _, r := range invalidURL {
+			in.EmitKeypress(string(r), tap.Key{})
+		}
+		in.EmitKeypress("", tap.Key{Name: "return"})
+
+		// Wait longer for the validation to fail and re-prompt
+		time.Sleep(500 * time.Millisecond)
+
+		// Type the valid URL now to fix it
+		for _, r := range ts.URL {
+			in.EmitKeypress(string(r), tap.Key{})
+		}
+		in.EmitKeypress("", tap.Key{Name: "return"})
+		time.Sleep(100 * time.Millisecond)
+
+		// 8. HA Webhook
+		webhook := strings.Repeat("b", 64)
+		for _, r := range webhook {
+			in.EmitKeypress(string(r), tap.Key{})
+		}
+		in.EmitKeypress("", tap.Key{Name: "return"})
+	}()
+
+	deps := setupSurveyDeps(t)
+	deps.resolver.discoverHomeAssistantFunc = func(ctx context.Context) ([]homeassistant.ServiceInstance, error) {
+		return nil, nil // Force manual entry
+	}
+
+	cfg, _, err := generateConfigInteractive(ctx, deps, false, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.HomeAssistant.URL != ts.URL {
+		t.Errorf("expected %s, got %s", ts.URL, cfg.HomeAssistant.URL)
 	}
 }

@@ -3,6 +3,7 @@ package homeassistant
 import (
 	"context"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -74,5 +75,50 @@ func TestDiscover_Timeout(t *testing.T) {
 	// We expect either nil (timeout reached) or context.DeadlineExceeded if it actually times out
 	if err != nil && err != context.DeadlineExceeded {
 		t.Fatalf("expected no error or deadline exceeded, got %v", err)
+	}
+}
+
+func TestDiscover_Success(t *testing.T) {
+	oldLookupType := lookupType
+	defer func() { lookupType = oldLookupType }()
+
+	lookupType = func(ctx context.Context, service string, add dnssd.AddFunc, rm dnssd.RmvFunc) error {
+		add(dnssd.BrowseEntry{
+			Name: "Home",
+			IPs:  []net.IP{net.ParseIP("192.168.1.100")},
+			Port: 8123,
+		})
+		return nil
+	}
+
+	instances, err := Discover(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(instances) != 1 {
+		t.Fatalf("expected 1 instance, got %d", len(instances))
+	}
+
+	if instances[0].Name != "Home" {
+		t.Errorf("expected name Home, got %s", instances[0].Name)
+	}
+
+	if len(instances[0].URLs) != 1 || instances[0].URLs[0] != "http://192.168.1.100:8123" {
+		t.Errorf("unexpected URLs: %v", instances[0].URLs)
+	}
+}
+
+func TestDiscover_Error(t *testing.T) {
+	oldLookupType := lookupType
+	defer func() { lookupType = oldLookupType }()
+
+	lookupType = func(ctx context.Context, service string, add dnssd.AddFunc, rm dnssd.RmvFunc) error {
+		return net.ErrClosed
+	}
+
+	_, err := Discover(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "dnssd lookup failed") {
+		t.Fatalf("expected dnssd lookup failed error, got %v", err)
 	}
 }

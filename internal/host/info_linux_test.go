@@ -63,3 +63,9 @@ func TestIsWOLCapableInterface_LinuxSpecific(t *testing.T) {
 		})
 	}
 }
+
+func TestPlatform_Linux(t *testing.T) {
+	if got := Platform(); got != "linux" {
+		t.Errorf("Platform() = %v, want linux", got)
+	}
+}
