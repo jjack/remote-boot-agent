@@ -1,0 +1,31 @@
+#!/bin/bash
+
+# Standard Git Pre-Commit Hook for GrubStation
+# This script runs Go formatting, linting, and validation before each commit.
+
+set -e
+
+echo "Running pre-commit hooks..."
+
+# 1. Format Check
+echo "Checking formatting (go fmt)..."
+go fmt ./...
+
+# 2. Mod Tidy
+echo "Tidying modules (go mod tidy)..."
+go mod tidy
+
+# 3. Vet
+echo "Running go vet..."
+go vet ./...
+
+# 4. Lint
+if command -v golangci-lint &> /dev/null; then
+    echo "Running golangci-lint..."
+    golangci-lint run ./...
+else
+    echo "Warning: golangci-lint not found, skipping."
+fi
+
+echo "All checks passed!"
+exit 0
