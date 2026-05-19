@@ -71,8 +71,10 @@ The `grubstation` CLI provides several commands for managing the agent and its i
 | `grubstation setup` | Runs the interactive configuration and installation wizard. |
 | `grubstation boot list` | Displays all boot entries discovered in your GRUB config. |
 | `grubstation boot push` | Manually pushes the current boot entries to Home Assistant. |
-| `grubstation service status`| Checks the status of the background agent service. |
-| `grubstation config validate` | Validates your `/etc/grubstation/config.yaml` for errors. |
+| `grubstation service status`| Checks the status of the background agent service and daemon health. |
+| `grubstation service start/stop`| Manually control the background agent service. |
+| `grubstation config validate` | Validates your configuration file for errors. |
+| `grubstation config init` | Generates a template `config.yaml` file. |
 
 ---
 

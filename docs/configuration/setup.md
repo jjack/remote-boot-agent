@@ -72,9 +72,27 @@ daemon:
 # Bootloader settings
 grub:
   config_path: "/boot/grub/grub.cfg" # Path to your grub.cfg
+  wait_time_seconds: 15              # How long GRUB waits for network (default: 2)
+  # url: "http://ha.local:8123"      # Optional: Override HA URL specifically for GRUB
 ```
 
-## 5. Security Architecture
+## 5. Command-Line Overrides
+
+Almost all configuration settings can be overridden at runtime using command-line flags. This is useful for testing or temporary adjustments.
+
+| Flag | Config Key | Description |
+| :--- | :--- | :--- |
+| `--config` | - | Path to the configuration file. |
+| `--host-address` | `host.address` | Override the reported IP address. |
+| `--host-mac` | `host.mac` | Override the reported MAC address. |
+| `--homeassistant-url` | `homeassistant.url` | Override the Home Assistant URL. |
+| `--homeassistant-webhook-id` | `homeassistant.webhook_id`| Override the Webhook ID. |
+| `--daemon-port` | `daemon.port` | Override the daemon listening port. |
+| `--daemon-key` | `daemon.api_key` | Override the /shutdown API key. |
+| `--grub-config` | `grub.config_path` | Override the path to `grub.cfg`. |
+| `--debug` | - | Enable verbose debug logging. |
+
+## 6. Security Architecture
 
 `grubstation` is designed with a "security-by-default" mindset:
 
