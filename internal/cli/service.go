@@ -175,19 +175,19 @@ func NewServiceStatusCmd(deps *CommandDeps) *cobra.Command {
 
 			// Also check health endpoint
 			client := &http.Client{Timeout: 2 * time.Second}
-			url := fmt.Sprintf("http://localhost:%d/healthcheck", deps.Config.Daemon.Port)
+			url := fmt.Sprintf("http://localhost:%d/status", deps.Config.Daemon.Port)
 			resp, err := client.Get(url)
 			if err != nil {
-				cmd.Printf("Daemon health check failed: %v (daemon might not be running or port is blocked)\n", err)
+				cmd.Printf("Daemon status check failed: %v (daemon might not be running or port is blocked)\n", err)
 				return nil
 			}
 			defer func() { _ = resp.Body.Close() }()
 
 			if resp.StatusCode == http.StatusOK {
 				body, _ := io.ReadAll(resp.Body)
-				cmd.Printf("Daemon health: %s", string(body))
+				cmd.Printf("Daemon status: %s\n", string(body))
 			} else {
-				cmd.Printf("Daemon health check returned non-OK status: %d\n", resp.StatusCode)
+				cmd.Printf("Daemon status check returned non-OK status: %d\n", resp.StatusCode)
 			}
 
 			return nil

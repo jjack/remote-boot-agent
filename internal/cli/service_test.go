@@ -147,7 +147,7 @@ func TestServiceStopCmd(t *testing.T) {
 
 func TestServiceStatusCmd(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/healthcheck" {
+		if r.URL.Path == "/status" {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("ALIVE"))
 		}
@@ -178,8 +178,8 @@ func TestServiceStatusCmd(t *testing.T) {
 	if !strings.Contains(out.String(), "Service mock-svc is active") {
 		t.Errorf("expected active message, got %q", out.String())
 	}
-	if !strings.Contains(out.String(), "Daemon health: ALIVE") {
-		t.Errorf("expected health message, got %q", out.String())
+	if !strings.Contains(out.String(), "Daemon status: ALIVE") {
+		t.Errorf("expected status message, got %q", out.String())
 	}
 }
 
@@ -204,8 +204,8 @@ func TestServiceStatusCmd_Inactive(t *testing.T) {
 	if !strings.Contains(out.String(), "Service mock-svc is inactive") {
 		t.Errorf("expected inactive message, got %q", out.String())
 	}
-	if !strings.Contains(out.String(), "Daemon health check failed") {
-		t.Errorf("expected failed health check message, got %q", out.String())
+	if !strings.Contains(out.String(), "Daemon status check failed") {
+		t.Errorf("expected failed status check message, got %q", out.String())
 	}
 }
 
@@ -235,8 +235,8 @@ func TestServiceStatusCmd_NonOK(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if !strings.Contains(out.String(), "Daemon health check returned non-OK status: 404") {
-		t.Errorf("expected 404 health check message, got %q", out.String())
+	if !strings.Contains(out.String(), "Daemon status check returned non-OK status: 404") {
+		t.Errorf("expected 404 status check message, got %q", out.String())
 	}
 }
 
