@@ -65,8 +65,11 @@ func TestNewServeCmd_NoReportBootOptions(t *testing.T) {
 		if cfg.ReportBootOptions {
 			t.Fatalf("expected ReportBootOptions to be false")
 		}
-		if regHandler != nil {
-			t.Fatalf("expected regHandler to be nil")
+		if regHandler == nil {
+			t.Fatalf("expected regHandler to be non-nil")
+		}
+		if updateHandler == nil {
+			t.Fatalf("expected updateHandler to be non-nil")
 		}
 		return &mockServeRunner{called: &called}
 	}

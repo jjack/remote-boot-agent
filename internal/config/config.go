@@ -66,27 +66,29 @@ type HomeAssistantConfig struct {
 	WebhookID string `yaml:"webhook_id"`
 }
 
-func (c *Config) ToYAML(maskWebhook bool) (string, error) {
+func (c *Config) ToYAML(maskWebhook bool, exhaustive bool) (string, error) {
 	displayCfg := *c
 
 	// If sub-configs are empty or default, nil them out so omitempty works
-	if displayCfg.WakeOnLan != nil {
-		if displayCfg.WakeOnLan.Address == DefaultWolBroadcastAddress {
-			displayCfg.WakeOnLan.Address = ""
+	if !exhaustive {
+		if displayCfg.WakeOnLan != nil {
+			if displayCfg.WakeOnLan.Address == DefaultWolBroadcastAddress {
+				displayCfg.WakeOnLan.Address = ""
+			}
+			if displayCfg.WakeOnLan.Port == DefaultWolBroadcastPort {
+				displayCfg.WakeOnLan.Port = 0
+			}
+			if displayCfg.WakeOnLan.Address == "" && displayCfg.WakeOnLan.Port == 0 {
+				displayCfg.WakeOnLan = nil
+			}
 		}
-		if displayCfg.WakeOnLan.Port == DefaultWolBroadcastPort {
-			displayCfg.WakeOnLan.Port = 0
-		}
-		if displayCfg.WakeOnLan.Address == "" && displayCfg.WakeOnLan.Port == 0 {
-			displayCfg.WakeOnLan = nil
-		}
-	}
-	if displayCfg.Grub != nil {
-		if displayCfg.Grub.WaitTimeSeconds == DefaultGrubWaitSeconds {
-			displayCfg.Grub.WaitTimeSeconds = 0
-		}
-		if displayCfg.Grub.WaitTimeSeconds == 0 && displayCfg.Grub.ConfigPath == "" && displayCfg.Grub.URL == "" {
-			displayCfg.Grub = nil
+		if displayCfg.Grub != nil {
+			if displayCfg.Grub.WaitTimeSeconds == DefaultGrubWaitSeconds {
+				displayCfg.Grub.WaitTimeSeconds = 0
+			}
+			if displayCfg.Grub.WaitTimeSeconds == 0 && displayCfg.Grub.ConfigPath == "" && displayCfg.Grub.URL == "" {
+				displayCfg.Grub = nil
+			}
 		}
 	}
 
@@ -164,7 +166,20 @@ func Load(cfgFile string, flags *pflag.FlagSet) (*Config, error) {
 
 func Save(cfg *Config, path string) error {
 	maskWebHook := false
-	out, err := cfg.ToYAML(maskWebHook)
+	out, err := cfg.ToYAML(maskWebHook, false)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	if err := os.WriteFile(path, []byte(out), 0o600); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+	return nil
+}
+
+func SaveExhaustive(cfg *Config, path string) error {
+	maskWebHook := false
+	out, err := cfg.ToYAML(maskWebHook, true)
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}

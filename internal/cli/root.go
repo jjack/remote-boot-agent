@@ -92,8 +92,16 @@ func NewCLI() *CLI {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			if cmd.Name() == "help" {
+			if cmd.Name() == "help" || cmd.Name() == "init" {
 				return nil
+			}
+
+			// setup command handles its own config loading/generation unless in --apply mode
+			if cmd.Name() == "setup" {
+				apply, _ := cmd.Flags().GetBool("apply")
+				if !apply {
+					return nil
+				}
 			}
 
 			if debugMode || os.Getenv("DEBUG") == "true" {

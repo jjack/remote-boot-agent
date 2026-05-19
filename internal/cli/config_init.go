@@ -24,6 +24,10 @@ func NewConfigInitCmd(deps *CommandDeps) *cobra.Command {
 					Address:    "127.0.0.1",
 					MACAddress: "00:00:00:00:00:00",
 				},
+				WakeOnLan: &config.WakeOnLanConfig{
+					Address: config.DefaultWolBroadcastAddress,
+					Port:    config.DefaultWolBroadcastPort,
+				},
 				HomeAssistant: config.HomeAssistantConfig{
 					URL:       "http://homeassistant.local:8123",
 					WebhookID: "CHANGE_ME",
@@ -31,13 +35,16 @@ func NewConfigInitCmd(deps *CommandDeps) *cobra.Command {
 				Daemon: config.DaemonConfig{
 					Port:              config.DefaultAgentPort,
 					ReportBootOptions: true,
+					APIKey:            "REPLACE_ME_OR_LEAVE_EMPTY_FOR_TOFU",
 				},
 				Grub: &config.GrubConfig{
-					WaitTimeSeconds: config.DefaultGrubWaitSeconds,
+					ConfigPath:      "/boot/grub/grub.cfg",
+					WaitTimeSeconds: 15,
+					URL:             "http://homeassistant.local:8123",
 				},
 			}
 
-			if err := config.Save(cfg, output); err != nil {
+			if err := config.SaveExhaustive(cfg, output); err != nil {
 				return fmt.Errorf("failed to save config: %w", err)
 			}
 

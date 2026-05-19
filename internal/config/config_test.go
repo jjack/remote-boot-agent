@@ -197,12 +197,21 @@ func TestConfig_ToYAML_DefaultGrub(t *testing.T) {
 			WaitTimeSeconds: DefaultGrubWaitSeconds,
 		},
 	}
-	yaml, err := cfg.ToYAML(false)
+	yaml, err := cfg.ToYAML(false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(yaml, "grub:") {
 		t.Errorf("expected grub to be omitted when it only contains default WaitTimeSeconds, got: %s", yaml)
+	}
+
+	// Test exhaustive
+	yaml, err = cfg.ToYAML(false, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(yaml, "grub:") {
+		t.Errorf("expected grub to be included in exhaustive mode, got: %s", yaml)
 	}
 }
 

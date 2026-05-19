@@ -35,11 +35,11 @@ func NewServeCmd(deps *CommandDeps) *cobra.Command {
 				mgrName = activeMgr.Name()
 			}
 
-			if deps.Config.Daemon.ReportBootOptions {
-				rep := reporter.New(deps.Config, deps.Grub, mgrName)
-				regHandler = rep.RegisterDaemon
-				updateHandler = rep.PushBootOptions
+			rep := reporter.New(deps.Config, deps.Grub, mgrName)
+			regHandler = rep.RegisterDaemon
+			updateHandler = rep.PushBootOptions
 
+			if deps.Config.Daemon.ReportBootOptions {
 				// Drift detection
 				waitTime := config.DefaultGrubWaitSeconds
 				targetURL := deps.Config.HomeAssistant.URL

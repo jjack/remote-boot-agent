@@ -300,7 +300,7 @@ func AssembleConfig(hostAddress, mac, wolAddress, haURL, haWebhook string, agent
 
 func PrintConfigSummary(cmd *cobra.Command, cfg *config.Config, cfgPath string) {
 	maskWebhook := true
-	out, err := cfg.ToYAML(maskWebhook)
+	out, err := cfg.ToYAML(maskWebhook, false)
 	if err != nil {
 		tap.Message(fmt.Sprintf("Error generating summary: %v", err))
 		return
