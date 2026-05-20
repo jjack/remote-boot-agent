@@ -3,19 +3,19 @@ package homeassistant
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
-	"sync"
 	"time"
 
-	"github.com/brutella/dnssd"
+	"github.com/grandcat/zeroconf"
 )
 
-const homeAssistantService = "_home-assistant._tcp.local."
-
-var (
-	discoveryTimeout = 5 * time.Second
-	lookupType       = dnssd.LookupType
+const (
+	homeAssistantService = "_home-assistant._tcp"
+	searchDomain         = "local"
 )
+
+var discoveryTimeout = 5 * time.Second
 
 type ServiceInstance struct {
 	Name string
@@ -27,35 +27,45 @@ func isSupportedURL(url string) bool {
 }
 
 func Discover(ctx context.Context) ([]ServiceInstance, error) {
-	var instances []ServiceInstance
-	var mu sync.Mutex
+	slog.Debug("Starting Home Assistant discovery via zeroconf", "service", homeAssistantService, "domain", searchDomain)
 
-	ctx, cancel := context.WithTimeout(ctx, discoveryTimeout)
+	resolver, err := zeroconf.NewResolver(nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize resolver: %w", err)
+	}
+
+	entries := make(chan *zeroconf.ServiceEntry)
+	var instances []ServiceInstance
+	done := make(chan struct{})
+
+	go func() {
+		for entry := range entries {
+			urls := extractURLs(entry)
+			if len(urls) > 0 {
+				instances = append(instances, ServiceInstance{
+					Name: entry.Instance,
+					URLs: urls,
+				})
+			}
+		}
+		close(done)
+	}()
+
+	browseCtx, cancel := context.WithTimeout(ctx, discoveryTimeout)
 	defer cancel()
 
-	add := func(e dnssd.BrowseEntry) {
-		mu.Lock()
-		defer mu.Unlock()
-
-		urls := extractURLs(e)
-		if len(urls) > 0 {
-			instances = append(instances, ServiceInstance{
-				Name: e.Name,
-				URLs: urls,
-			})
-		}
+	err = resolver.Browse(browseCtx, homeAssistantService, searchDomain, entries)
+	if err != nil {
+		return nil, fmt.Errorf("failed to browse: %w", err)
 	}
 
-	// lookupType blocks until context is cancelled
-	err := lookupType(ctx, homeAssistantService, add, func(e dnssd.BrowseEntry) {})
-	if err != nil && err != context.Canceled && err != context.DeadlineExceeded {
-		return nil, fmt.Errorf("dnssd lookup failed: %w", err)
-	}
+	<-browseCtx.Done()
+	<-done
 
 	return instances, nil
 }
 
-func extractURLs(e dnssd.BrowseEntry) []string {
+func extractURLs(e *zeroconf.ServiceEntry) []string {
 	var urls []string
 	seen := make(map[string]bool)
 
@@ -66,20 +76,33 @@ func extractURLs(e dnssd.BrowseEntry) []string {
 		}
 	}
 
+	// Parse TXT records
+	txtMap := make(map[string]string)
+	for _, txt := range e.Text {
+		parts := strings.SplitN(txt, "=", 2)
+		if len(parts) == 2 {
+			txtMap[parts[0]] = parts[1]
+		}
+	}
+	if len(txtMap) > 0 {
+		slog.Debug("Parsed TXT records", "instance", e.Instance, "data", txtMap)
+	}
+
 	// Try TXT records first
-	if url, ok := e.Text["internal_url"]; ok && isSupportedURL(url) {
+	if url, ok := txtMap["internal_url"]; ok && isSupportedURL(url) {
+		slog.Debug("Found internal_url in TXT", "instance", e.Instance, "url", url)
 		addURL(url)
 	}
-	if url, ok := e.Text["base_url"]; ok && isSupportedURL(url) {
+	if url, ok := txtMap["base_url"]; ok && isSupportedURL(url) {
+		slog.Debug("Found base_url in TXT", "instance", e.Instance, "url", url)
 		addURL(url)
 	}
 
 	// Fallback to IP:Port
-	for _, ip := range e.IPs {
-		// Prefer IPv4 for compatibility
-		if ip.To4() != nil {
-			addURL(fmt.Sprintf("http://%s:%d", ip.String(), e.Port))
-		}
+	for _, ip := range e.AddrIPv4 {
+		url := fmt.Sprintf("http://%s:%d", ip.String(), e.Port)
+		slog.Debug("Falling back to IP:Port URL", "instance", e.Instance, "url", url)
+		addURL(url)
 	}
 
 	return urls
