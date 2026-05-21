@@ -11,8 +11,8 @@ import (
 func TestIsWOLCapableInterface_LinuxSpecific(t *testing.T) {
 	mac, _ := net.ParseMAC("00:11:22:33:44:55")
 
-	oldOsStat := osStat
-	defer func() { osStat = oldOsStat }()
+	oldOsStat := OsStat
+	defer func() { OsStat = oldOsStat }()
 
 	tests := []struct {
 		name     string
@@ -56,7 +56,7 @@ func TestIsWOLCapableInterface_LinuxSpecific(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			osStat = tt.mockStat
+			OsStat = tt.mockStat
 			if got := isWOLCapableInterface(tt.inf); got != tt.expected {
 				t.Errorf("isWOLCapableInterface() = %v, want %v", got, tt.expected)
 			}

@@ -4,13 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net"
 	"os"
 
 	"github.com/jjack/grubstation/internal/config"
 	"github.com/jjack/grubstation/internal/grub"
-	"github.com/jjack/grubstation/internal/homeassistant"
-	"github.com/jjack/grubstation/internal/host"
 	"github.com/jjack/grubstation/internal/servicemanager"
 	"github.com/spf13/cobra"
 )
@@ -20,51 +17,11 @@ type CLI struct {
 	RootCmd *cobra.Command
 }
 
-type SystemResolver interface {
-	DiscoverHomeAssistant(ctx context.Context) ([]homeassistant.ServiceInstance, error)
-	DetectSystemHostname() (string, error)
-	GetWOLInterfaces() ([]net.Interface, error)
-	GetIPInfo(inf net.Interface) ([]string, map[string]string)
-	GetFQDN(hostname string, inf *net.Interface) string
-	SaveConfig(cfg *config.Config, path string) error
-	DiscoverGrubConfig(ctx context.Context) (string, error)
-}
-
-type DefaultSystemResolver struct{}
-
-func (d *DefaultSystemResolver) DiscoverHomeAssistant(ctx context.Context) ([]homeassistant.ServiceInstance, error) {
-	return homeassistant.Discover(ctx)
-}
-
-func (d *DefaultSystemResolver) DetectSystemHostname() (string, error) {
-	return host.DetectHostname()
-}
-
-func (d *DefaultSystemResolver) GetWOLInterfaces() ([]net.Interface, error) {
-	return host.GetWOLInterfaces()
-}
-
-func (d *DefaultSystemResolver) GetIPInfo(inf net.Interface) ([]string, map[string]string) {
-	return host.GetIPInfo(inf)
-}
-func (d *DefaultSystemResolver) GetFQDN(hostname string, inf *net.Interface) string {
-	return host.GetFQDN(hostname, inf)
-}
-func (d *DefaultSystemResolver) SaveConfig(cfg *config.Config, path string) error {
-	return config.Save(cfg, path)
-}
-
-func (d *DefaultSystemResolver) DiscoverGrubConfig(ctx context.Context) (string, error) {
-	g := &grub.Grub{}
-	return g.DiscoverConfigPath(ctx)
-}
-
 type CommandDeps struct {
-	Config         *config.Config
-	ConfigFile     string
-	Grub           *grub.Grub
-	Registry       *servicemanager.Registry
-	SystemResolver SystemResolver
+	Config     *config.Config
+	ConfigFile string
+	Grub       *grub.Grub
+	Registry   *servicemanager.Registry
 }
 
 func (cd *CommandDeps) Manager(ctx context.Context) (servicemanager.Manager, error) {
@@ -79,10 +36,9 @@ func NewCLI() *CLI {
 	cli := &CLI{}
 
 	deps := &CommandDeps{
-		Config:         &config.Config{},
-		Grub:           &grub.Grub{},
-		Registry:       servicemanager.NewRegistry(),
-		SystemResolver: &DefaultSystemResolver{},
+		Config:   &config.Config{},
+		Grub:     &grub.Grub{},
+		Registry: servicemanager.NewRegistry(),
 	}
 
 	var cfgFile string

@@ -68,7 +68,7 @@ func GetFQDN(hostname string, inf *net.Interface) string {
 		}
 	}
 
-	if cname, err := netLookupCNAME(hostname); err == nil && cname != "" {
+	if cname, err := NetLookupCNAME(hostname); err == nil && cname != "" {
 		return strings.TrimSuffix(cname, ".")
 	}
 	return hostname

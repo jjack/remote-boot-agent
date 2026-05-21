@@ -170,7 +170,7 @@ func Load(cfgFile string, flags *pflag.FlagSet) (*Config, error) {
 	return &cfg, nil
 }
 
-func Save(cfg *Config, path string) error {
+var Save = func(cfg *Config, path string) error {
 	maskWebHook := false
 	out, err := cfg.ToYAML(maskWebHook, false)
 	if err != nil {

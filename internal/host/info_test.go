@@ -9,19 +9,19 @@ import (
 )
 
 func TestGetWOLInterfaces(t *testing.T) {
-	oldNetInterfaces := netInterfaces
-	oldOsStat := osStat
+	oldNetInterfaces := NetInterfaces
+	oldOsStat := OsStat
 	defer func() {
-		netInterfaces = oldNetInterfaces
-		osStat = oldOsStat
+		NetInterfaces = oldNetInterfaces
+		OsStat = oldOsStat
 	}()
 
 	mac, _ := net.ParseMAC("aa:bb:cc:dd:ee:ff")
-	netInterfaces = func() ([]net.Interface, error) {
+	NetInterfaces = func() ([]net.Interface, error) {
 		return []net.Interface{{Name: "eth0", HardwareAddr: mac, Flags: net.FlagUp}}, nil
 	}
 
-	osStat = func(name string) (os.FileInfo, error) {
+	OsStat = func(name string) (os.FileInfo, error) {
 		return nil, nil // mock device file exists
 	}
 
@@ -62,10 +62,10 @@ func TestDetectHostname(t *testing.T) {
 }
 
 func TestDetectHostname_Error(t *testing.T) {
-	oldOsHostname := osHostname
-	defer func() { osHostname = oldOsHostname }()
+	oldOsHostname := OsHostname
+	defer func() { OsHostname = oldOsHostname }()
 
-	osHostname = func() (string, error) {
+	OsHostname = func() (string, error) {
 		return "", errors.New("mock hostname error")
 	}
 
@@ -79,10 +79,10 @@ func TestDetectHostname_Error(t *testing.T) {
 }
 
 func TestGetWOLInterfaces_Error(t *testing.T) {
-	oldNetInterfaces := netInterfaces
-	defer func() { netInterfaces = oldNetInterfaces }()
+	oldNetInterfaces := NetInterfaces
+	defer func() { NetInterfaces = oldNetInterfaces }()
 
-	netInterfaces = func() ([]net.Interface, error) {
+	NetInterfaces = func() ([]net.Interface, error) {
 		return nil, errors.New("mock interfaces error")
 	}
 
@@ -96,10 +96,10 @@ func TestGetWOLInterfaces_Error(t *testing.T) {
 }
 
 func TestGetWOLInterfaces_NoSuitable(t *testing.T) {
-	oldNetInterfaces := netInterfaces
-	defer func() { netInterfaces = oldNetInterfaces }()
+	oldNetInterfaces := NetInterfaces
+	defer func() { NetInterfaces = oldNetInterfaces }()
 
-	netInterfaces = func() ([]net.Interface, error) {
+	NetInterfaces = func() ([]net.Interface, error) {
 		// Return an interface that will be skipped (no MAC)
 		return []net.Interface{
 			{
@@ -154,10 +154,10 @@ func TestIsWOLCapableInterface(t *testing.T) {
 }
 
 func TestGetIPv4Info(t *testing.T) {
-	oldGetAddrs := getAddrs
-	defer func() { getAddrs = oldGetAddrs }()
+	oldGetAddrs := GetAddrs
+	defer func() { GetAddrs = oldGetAddrs }()
 
-	getAddrs = func(iface net.Interface) ([]net.Addr, error) {
+	GetAddrs = func(iface net.Interface) ([]net.Addr, error) {
 		ip, ipnet, _ := net.ParseCIDR("192.168.1.50/24")
 		ipnet.IP = ip
 		return []net.Addr{ipnet}, nil
@@ -173,10 +173,10 @@ func TestGetIPv4Info(t *testing.T) {
 }
 
 func TestGetIPInfo_FiltersIPv6(t *testing.T) {
-	oldGetAddrs := getAddrs
-	defer func() { getAddrs = oldGetAddrs }()
+	oldGetAddrs := GetAddrs
+	defer func() { GetAddrs = oldGetAddrs }()
 
-	getAddrs = func(iface net.Interface) ([]net.Addr, error) {
+	GetAddrs = func(iface net.Interface) ([]net.Addr, error) {
 		ip4, ipv4net, _ := net.ParseCIDR("192.168.1.50/24")
 		ipv4net.IP = ip4
 		_, ipv6net, _ := net.ParseCIDR("fd00::1/64")
@@ -201,10 +201,10 @@ func TestGetLastIP_IPv6(t *testing.T) {
 }
 
 func TestGetIPv4Info_Error(t *testing.T) {
-	oldGetAddrs := getAddrs
-	defer func() { getAddrs = oldGetAddrs }()
+	oldGetAddrs := GetAddrs
+	defer func() { GetAddrs = oldGetAddrs }()
 
-	getAddrs = func(iface net.Interface) ([]net.Addr, error) {
+	GetAddrs = func(iface net.Interface) ([]net.Addr, error) {
 		return nil, errors.New("mock addrs error")
 	}
 
@@ -218,10 +218,10 @@ func TestGetIPv4Info_Error(t *testing.T) {
 }
 
 func TestGetIPv4Info_NonIPNet(t *testing.T) {
-	oldGetAddrs := getAddrs
-	defer func() { getAddrs = oldGetAddrs }()
+	oldGetAddrs := GetAddrs
+	defer func() { GetAddrs = oldGetAddrs }()
 
-	getAddrs = func(iface net.Interface) ([]net.Addr, error) {
+	GetAddrs = func(iface net.Interface) ([]net.Addr, error) {
 		return []net.Addr{&net.UnixAddr{Name: "test", Net: "unix"}}, nil
 	}
 
@@ -235,10 +235,10 @@ func TestGetIPv4Info_NonIPNet(t *testing.T) {
 }
 
 func TestGetFQDN(t *testing.T) {
-	oldLookupCNAME := netLookupCNAME
-	defer func() { netLookupCNAME = oldLookupCNAME }()
+	oldLookupCNAME := NetLookupCNAME
+	defer func() { NetLookupCNAME = oldLookupCNAME }()
 
-	netLookupCNAME = func(name string) (string, error) {
+	NetLookupCNAME = func(name string) (string, error) {
 		return name + ".local.lan.", nil
 	}
 
@@ -247,7 +247,7 @@ func TestGetFQDN(t *testing.T) {
 		t.Errorf("expected my-host.local.lan, got %s", fqdn)
 	}
 
-	netLookupCNAME = func(name string) (string, error) {
+	NetLookupCNAME = func(name string) (string, error) {
 		return "", errors.New("lookup failed")
 	}
 

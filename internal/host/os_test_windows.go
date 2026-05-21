@@ -9,10 +9,10 @@ import (
 )
 
 func TestGetFQDN_Windows(t *testing.T) {
-	oldLookupCNAME := netLookupCNAME
+	oldLookupCNAME := NetLookupCNAME
 	oldGetAdapterDNSSuffix := getAdapterDNSSuffix
 	defer func() {
-		netLookupCNAME = oldLookupCNAME
+		NetLookupCNAME = oldLookupCNAME
 		getAdapterDNSSuffix = oldGetAdapterDNSSuffix
 	}()
 
@@ -35,7 +35,7 @@ func TestGetFQDN_Windows(t *testing.T) {
 		getAdapterDNSSuffix = func(ifIndex uint32) string {
 			return ""
 		}
-		netLookupCNAME = func(name string) (string, error) {
+		NetLookupCNAME = func(name string) (string, error) {
 			return "host.external.com.", nil
 		}
 		fqdn := GetFQDN("host", mockIface)
@@ -48,7 +48,7 @@ func TestGetFQDN_Windows(t *testing.T) {
 		getAdapterDNSSuffix = func(ifIndex uint32) string {
 			return ""
 		}
-		netLookupCNAME = func(name string) (string, error) {
+		NetLookupCNAME = func(name string) (string, error) {
 			return "", errors.New("failed")
 		}
 		fqdn := GetFQDN("host", nil)

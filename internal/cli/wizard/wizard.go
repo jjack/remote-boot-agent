@@ -16,18 +16,14 @@ import (
 	"github.com/yarlson/tap"
 )
 
-type SystemResolver interface {
-	DiscoverHomeAssistant(ctx context.Context) ([]homeassistant.ServiceInstance, error)
-	DetectSystemHostname() (string, error)
-	GetWOLInterfaces() ([]net.Interface, error)
-	GetIPInfo(inf net.Interface) ([]string, map[string]string)
-	GetFQDN(hostname string, inf *net.Interface) string
-	DiscoverGrubConfig(ctx context.Context) (string, error)
-}
-
-type SurveyDeps interface {
-	GetSystemResolver() SystemResolver
-	IsInstalled(ctx context.Context) (bool, error)
+type SurveyDeps struct {
+	DiscoverHomeAssistant func(ctx context.Context) ([]homeassistant.ServiceInstance, error)
+	DetectSystemHostname  func() (string, error)
+	GetWOLInterfaces      func() ([]net.Interface, error)
+	GetIPInfo             func(inf net.Interface) ([]string, map[string]string)
+	GetFQDN               func(hostname string, inf *net.Interface) string
+	DiscoverGrubConfig    func(ctx context.Context) (string, error)
+	IsInstalled           func(ctx context.Context) (bool, error)
 }
 
 var (
@@ -37,8 +33,6 @@ var (
 )
 
 func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall bool, currentPort int, isDryRun bool) (*config.Config, error) {
-	resolver := deps.GetSystemResolver()
-
 	// 0. Overwrite Confirmation
 	if isReinstall && !isDryRun {
 		overwrite := tap.Confirm(ctx, tap.ConfirmOptions{
@@ -54,21 +48,21 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 	}
 
 	// 1. Initial Discovery
-	hostname, err := resolver.DetectSystemHostname()
+	hostname, err := deps.DetectSystemHostname()
 	if err != nil {
 		slog.Debug("Failed to detect system hostname", "error", err)
 		return nil, err
 	}
 	slog.Debug("Detected system hostname", "hostname", hostname)
 
-	interfaces, err := resolver.GetWOLInterfaces()
+	interfaces, err := deps.GetWOLInterfaces()
 	if err != nil {
 		slog.Debug("Failed to get WOL interfaces", "error", err)
 		return nil, err
 	}
 	slog.Debug("Detected WOL interfaces", "count", len(interfaces))
 
-	grubConfigPath, _ := resolver.DiscoverGrubConfig(ctx)
+	grubConfigPath, _ := deps.DiscoverGrubConfig(ctx)
 	slog.Debug("Discovered GRUB config path", "path", grubConfigPath)
 
 	// Background HA Discovery
@@ -79,7 +73,7 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 	haChan := make(chan haResult, 1)
 	go func() {
 		slog.Debug("Starting background Home Assistant discovery")
-		instances, err := resolver.DiscoverHomeAssistant(ctx)
+		instances, err := deps.DiscoverHomeAssistant(ctx)
 		if err != nil {
 			slog.Debug("Background HA discovery failed", "error", err)
 		} else {
@@ -107,7 +101,7 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 	globalInfoChan := make(chan globalInfo, 1)
 	go func() {
 		slog.Debug("Starting background global FQDN resolution", "hostname", hostname)
-		fqdn := resolver.GetFQDN(hostname, nil)
+		fqdn := deps.GetFQDN(hostname, nil)
 		slog.Debug("Background global FQDN resolution complete", "fqdn", fqdn)
 		globalInfoChan <- globalInfo{fqdn}
 	}()
@@ -115,7 +109,7 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 	// 3. Network Interface
 	ifaceIdx := tap.Select(ctx, tap.SelectOptions[int]{
 		Message: "Available Network Interface",
-		Options: BuildIfaceOptions(interfaces, resolver.GetIPInfo),
+		Options: BuildIfaceOptions(interfaces, deps.GetIPInfo),
 	})
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
@@ -124,11 +118,11 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 	slog.Debug("Selected network interface", "interface", selectedIface.Name, "mac", selectedIface.HardwareAddr.String())
 
 	// 4. Host Address
-	ips, broadcasts := resolver.GetIPInfo(selectedIface)
+	ips, broadcasts := deps.GetIPInfo(selectedIface)
 	slog.Debug("Interface IP info", "ips", ips, "broadcasts", broadcasts)
 
 	// Local FQDN resolution (fast on Windows, just a local check)
-	localFQDN := resolver.GetFQDN(hostname, &selectedIface)
+	localFQDN := deps.GetFQDN(hostname, &selectedIface)
 	slog.Debug("Local FQDN resolution result", "fqdn", localFQDN)
 
 	var globalFQDN string

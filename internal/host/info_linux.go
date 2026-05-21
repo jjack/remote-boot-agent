@@ -20,7 +20,7 @@ func isPhysicalInterface(inf net.Interface) bool {
 	}
 
 	path := fmt.Sprintf("/sys/class/net/%s/device", inf.Name)
-	_, err := osStat(path)
+	_, err := OsStat(path)
 	return !os.IsNotExist(err)
 }
 
@@ -30,7 +30,7 @@ func Platform() string {
 
 // GetFQDN attempts to resolve the Fully Qualified Domain Name for a given hostname.
 func GetFQDN(hostname string, _ *net.Interface) string {
-	if cname, err := netLookupCNAME(hostname); err == nil && cname != "" {
+	if cname, err := NetLookupCNAME(hostname); err == nil && cname != "" {
 		return strings.TrimSuffix(cname, ".")
 	}
 	return hostname

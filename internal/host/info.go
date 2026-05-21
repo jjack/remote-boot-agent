@@ -9,13 +9,13 @@ import (
 )
 
 var (
-	osHostname     = os.Hostname
-	netInterfaces  = net.Interfaces
-	netLookupCNAME = net.LookupCNAME
-	getAddrs       = func(iface net.Interface) ([]net.Addr, error) {
+	OsHostname     = os.Hostname
+	NetInterfaces  = net.Interfaces
+	NetLookupCNAME = net.LookupCNAME
+	GetAddrs       = func(iface net.Interface) ([]net.Addr, error) {
 		return iface.Addrs()
 	}
-	osStat = os.Stat
+	OsStat = os.Stat
 )
 
 var (
@@ -46,7 +46,7 @@ func isWOLCapableInterface(inf net.Interface) bool {
 
 // GetWOLInterfaces returns a slice of net.Interface that are capable of Wake-on-LAN.
 func GetWOLInterfaces() ([]net.Interface, error) {
-	interfaces, err := netInterfaces()
+	interfaces, err := NetInterfaces()
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrListInterfaces, err)
 	}
@@ -96,7 +96,7 @@ func GetIPInfo(inf net.Interface) ([]string, map[string]string) {
 	var ips []string
 	broadcasts := make(map[string]string)
 
-	addrs, err := getAddrs(inf)
+	addrs, err := GetAddrs(inf)
 	if err != nil {
 		return ips, broadcasts
 	}
@@ -119,7 +119,7 @@ func GetIPInfo(inf net.Interface) ([]string, map[string]string) {
 }
 
 func DetectHostname() (string, error) {
-	hostname, err := osHostname()
+	hostname, err := OsHostname()
 	if err != nil {
 		return "", fmt.Errorf("%w: %w", ErrDetectHostname, err)
 	}

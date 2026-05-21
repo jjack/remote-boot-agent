@@ -14,6 +14,8 @@ import (
 	"github.com/jjack/grubstation/internal/cli/wizard"
 	"github.com/jjack/grubstation/internal/config"
 	"github.com/jjack/grubstation/internal/grub"
+	"github.com/jjack/grubstation/internal/homeassistant"
+	"github.com/jjack/grubstation/internal/host"
 	"github.com/jjack/grubstation/internal/reporter"
 	"github.com/jjack/grubstation/internal/servicemanager"
 	"github.com/spf13/cobra"
@@ -137,16 +139,18 @@ func ensureSupport(ctx context.Context, deps *CommandDeps) (servicemanager.Manag
 	return mgr, nil
 }
 
-type surveyDepsAdapter struct {
-	deps *CommandDeps
-}
-
-func (a surveyDepsAdapter) GetSystemResolver() wizard.SystemResolver {
-	return a.deps.SystemResolver
-}
-
-func (a surveyDepsAdapter) IsInstalled(ctx context.Context) (bool, error) {
-	return IsInstalled(ctx, a.deps)
+func (deps *CommandDeps) SurveyDeps() wizard.SurveyDeps {
+	return wizard.SurveyDeps{
+		DiscoverHomeAssistant: homeassistant.Discover,
+		DetectSystemHostname:  host.DetectHostname,
+		GetWOLInterfaces:      host.GetWOLInterfaces,
+		GetIPInfo:             host.GetIPInfo,
+		GetFQDN:               host.GetFQDN,
+		DiscoverGrubConfig:    deps.Grub.DiscoverConfigPath,
+		IsInstalled: func(ctx context.Context) (bool, error) {
+			return IsInstalled(ctx, deps)
+		},
+	}
 }
 
 func IsInstalled(ctx context.Context, deps *CommandDeps) (bool, error) {
@@ -238,7 +242,7 @@ func NewSetupCmd(deps *CommandDeps) *cobra.Command {
 			if _, err := os.Stat(cfgPath); err == nil {
 				isConfigured = true
 			}
-			cfg, err := wizard.RunGenerateSurvey(cmd.Context(), surveyDepsAdapter{deps: deps}, isConfigured, currentPort, dryRun)
+			cfg, err := wizard.RunGenerateSurvey(cmd.Context(), deps.SurveyDeps(), isConfigured, currentPort, dryRun)
 			if err != nil {
 				if errors.Is(err, wizard.ErrAborted) {
 					tap.Message("Setup aborted.")
@@ -284,7 +288,7 @@ func NewSetupCmd(deps *CommandDeps) *cobra.Command {
 				return nil
 			}
 
-			if err := deps.SystemResolver.SaveConfig(cfg, cfgPath); err != nil {
+			if err := config.Save(cfg, cfgPath); err != nil {
 				return err
 			}
 

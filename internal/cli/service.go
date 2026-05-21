@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jjack/grubstation/internal/homeassistant"
+	"github.com/jjack/grubstation/internal/host"
 	"github.com/spf13/cobra"
 )
 
@@ -74,12 +75,12 @@ func NewServiceRemoveCmd(deps *CommandDeps) *cobra.Command {
 				addr := deps.Config.Host.Address
 
 				if mac == "" || addr == "" {
-					if ifaces, err := deps.SystemResolver.GetWOLInterfaces(); err == nil && len(ifaces) > 0 {
+					if ifaces, err := host.GetWOLInterfaces(); err == nil && len(ifaces) > 0 {
 						if mac == "" {
 							mac = ifaces[0].HardwareAddr.String()
 						}
 						if addr == "" {
-							ips, _ := deps.SystemResolver.GetIPInfo(ifaces[0])
+							ips, _ := host.GetIPInfo(ifaces[0])
 							if len(ips) > 0 {
 								addr = ips[0]
 							}

@@ -2,50 +2,9 @@ package cli
 
 import (
 	"bytes"
-	"context"
-	"net"
 	"os"
 	"testing"
-	"time"
-
-	"github.com/jjack/grubstation/internal/config"
 )
-
-func TestDefaultSystemResolver(t *testing.T) {
-	// Ensure DefaultSystemResolver satisfies the SystemResolver interface
-	var _ SystemResolver = (*DefaultSystemResolver)(nil)
-	resolver := &DefaultSystemResolver{}
-
-	// Short timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-
-	// These are pass-throughs to the real system packages.
-	// We just want to ensure they don't panic and are wired up correctly.
-	_, _ = resolver.DiscoverHomeAssistant(ctx)
-	_, _ = resolver.DetectSystemHostname()
-
-	ifaces, _ := resolver.GetWOLInterfaces()
-	if len(ifaces) > 0 {
-		ips, _ := resolver.GetIPInfo(ifaces[0])
-		_ = ips
-	} else {
-		_, _ = resolver.GetIPInfo(net.Interface{})
-	}
-
-	_ = resolver.GetFQDN("localhost", nil)
-
-	f, err := os.CreateTemp("", "test-config-*.yaml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_ = f.Close()
-	defer func() { _ = os.Remove(f.Name()) }()
-
-	if err := resolver.SaveConfig(&config.Config{}, f.Name()); err != nil {
-		t.Fatalf("expected no error saving config, got: %v", err)
-	}
-}
 
 func TestNewCLI(t *testing.T) {
 	cli := NewCLI()
@@ -132,11 +91,4 @@ func TestBootCmd(t *testing.T) {
 	if cmd.Use != "boot" {
 		t.Errorf("expected Use 'boot', got %q", cmd.Use)
 	}
-}
-
-func TestDefaultSystemResolver_DiscoverGrubConfig(t *testing.T) {
-	resolver := &DefaultSystemResolver{}
-	// This will call grub.DiscoverConfigPath which checks for /boot/grub/grub.cfg etc.
-	// It's fine if it returns an error or empty string as long as it doesn't panic.
-	_, _ = resolver.DiscoverGrubConfig(context.Background())
 }
