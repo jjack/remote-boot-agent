@@ -45,36 +45,16 @@ The `/shutdown` endpoint is secured via an API key.
 
 ## 4. Manual Configuration Reference
 
-The configuration file is typically located at `/etc/grubstation/config.yaml`.
+You can generate an empty config file with `grubstation config init -o config.yaml`
 
-```yaml
-# Host identification
-host:
-  address: "192.168.1.50"      # This machine's IP or FQDN
-  mac: "00:11:22:33:44:55"     # MAC address used for Wake-on-LAN
+| OS | Default Path |
+| -- | ------------ |
+| Linux | /etc/grubstation/config.yaml |
+| Windows | C:\ProgramData\GrubStation\config.yaml 
 
-# Wake-on-LAN settings
-wake_on_lan:
-  # address: "255.255.255.255" # Optional: Custom broadcast address
-  # port: 9                    # Optional: Custom UDP port
+See [config.sample.yaml](config.sample.yaml) for a complete configuration example.
 
-# Home Assistant connection
-homeassistant:
-  url: "http://ha.local:8123"  # Your Home Assistant base URL
-  webhook_id: "your_id_here"   # The unique Webhook ID from the HA Integration
-
-# Daemon behavior
-daemon:
-  port: 8081                   # The port the daemon listens on
-  report_boot_options: true    # Enable/Disable pushing entries to HA
-  # api_key: "secure_secret"   # Optional: Static API key for /shutdown
-
-# Bootloader settings
-grub:
-  config_path: "/boot/grub/grub.cfg" # Path to your grub.cfg
-  wait_time_seconds: 15              # How long GRUB waits for network (default: 2)
-  # url: "http://ha.local:8123"      # Optional: Override HA URL specifically for GRUB
-```
+You can also use [config.shutdown.sample.yaml](config.shutdown.sample.yaml) for a shutdown-only agent.
 
 ## 5. Command-Line Overrides
 
@@ -82,7 +62,7 @@ Almost all configuration settings can be overridden at runtime using command-lin
 
 | Flag | Config Key | Description |
 | :--- | :--- | :--- |
-| `--config` | - | Path to the configuration file. |
+| `--config` | - | Override the path to the configuration file. |
 | `--host-address` | `host.address` | Override the reported IP address. |
 | `--host-mac` | `host.mac` | Override the reported MAC address. |
 | `--homeassistant-url` | `homeassistant.url` | Override the Home Assistant URL. |
@@ -94,9 +74,9 @@ Almost all configuration settings can be overridden at runtime using command-lin
 
 ## 6. Security Architecture
 
-`grubstation` is designed with a "security-by-default" mindset:
+`grubstation` is designed with a "security-by-default" mindset, with homelabs and trusted networks in mind:
 
-- **Unique Webhooks:** Communication with Home Assistant is routed through a unique, non-guessable Webhook ID. This acts as a shared secret between your agent and your HA instance.
+- **Unique Webhooks IDs:** Communication with Home Assistant is routed through a unique, non-guessable Webhook ID. This acts as a shared secret between your agent and your HA instance.
 - **Secure Shutdowns:** The remote shutdown feature is protected by a 256-bit token (either pre-configured or generated via TOFU).
 - **Minimal Surface:** The daemon only exposes a strictly defined API and does not require incoming connections from the public internet.
 

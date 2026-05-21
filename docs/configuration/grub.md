@@ -1,8 +1,6 @@
 # Bootloader Configuration (GRUB)
 
-The remote selection feature of `grubstation` works by installing a custom script into your GRUB configuration directory. This script runs early in the boot process, connects to Home Assistant, and determines which OS should be booted.
-
-> **💡 Note:** The `sudo grubstation setup` command handles this installation automatically. Manual configuration is only recommended for advanced users or troubleshooting.
+The remote selection feature of `grubstation` works by installing a custom script into your GRUB configuration directory. This runs early in the boot process, connects to Home Assistant, and determines which OS should be booted.
 
 ## 1. How it Works
 
@@ -15,6 +13,9 @@ This script:
 4. If a specific OS was selected in HA, it overrides the `default` boot entry.
 
 ## 2. Manual Installation
+
+> **💡 Note:** The `sudo grubstation setup` command handles this installation automatically. Manual configuration is only recommended for advanced users, troubleshooting, or for configuring motherboard-specific boot options.
+
 
 If you need to install the hook manually, create a file at `/etc/grub.d/99_grubstation`:
 
@@ -70,8 +71,11 @@ The script attempts to load `net`, `efinet`, and `http`. Depending on your hardw
 
 ### Spanning Tree Protocol (STP)
 If your network switch has STP enabled, it may take 15-30 seconds for a port to transition to the "forwarding" state after the link comes up. Because GRUB initializes the link very quickly, it often fails the first few DHCP attempts.
-- **Solution:** `grubstation` includes a retry loop. You can increase the `wait_time_seconds` in your config to give the switch more time.
+- **Solution:** `grubstation` includes a retry loop. You can increase the `wait_time_seconds` in your config to give the switch more time. Be sure to run `sudo grubstation setup apply` afterwards.
 - **Optimization:** If possible, set the switch port to "Edge Port" or "PortFast" mode.
 
 ### Wireless & Complex Networks
 GRUB does **not** support Wi-Fi. The machine must be connected via Ethernet. Additionally, complex network setups (like 802.1X authentication or complex VLAN tagging) are generally not supported within the GRUB environment.
+
+### Fastboot
+Depending on your motherboard, having fastboot enabled might also prevent your network card or settings from being detected by GRUB.
