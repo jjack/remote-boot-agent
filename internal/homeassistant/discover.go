@@ -42,6 +42,7 @@ func Discover(ctx context.Context) ([]ServiceInstance, error) {
 		for entry := range entries {
 			urls := extractURLs(entry)
 			if len(urls) > 0 {
+				slog.Debug("Discovered Home Assistant instance", "instance", entry.Instance, "urls", urls)
 				instances = append(instances, ServiceInstance{
 					Name: entry.Instance,
 					URLs: urls,

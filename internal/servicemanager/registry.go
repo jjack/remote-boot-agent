@@ -2,6 +2,7 @@ package servicemanager
 
 import (
 	"context"
+	"log/slog"
 	"sort"
 )
 
@@ -38,6 +39,7 @@ func (r *Registry) Detect(ctx context.Context) (Manager, error) {
 	for _, name := range names {
 		mgr := r.services[name]()
 		if mgr.IsActive(ctx) {
+			slog.Debug("Detected service manager", "name", name)
 			return mgr, nil
 		}
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"strconv"
@@ -55,14 +56,20 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 	// 1. Initial Discovery
 	hostname, err := resolver.DetectSystemHostname()
 	if err != nil {
+		slog.Debug("Failed to detect system hostname", "error", err)
 		return nil, err
 	}
+	slog.Debug("Detected system hostname", "hostname", hostname)
+
 	interfaces, err := resolver.GetWOLInterfaces()
 	if err != nil {
+		slog.Debug("Failed to get WOL interfaces", "error", err)
 		return nil, err
 	}
+	slog.Debug("Detected WOL interfaces", "count", len(interfaces))
 
 	grubConfigPath, _ := resolver.DiscoverGrubConfig(ctx)
+	slog.Debug("Discovered GRUB config path", "path", grubConfigPath)
 
 	// Background HA Discovery
 	type haResult struct {
@@ -71,7 +78,13 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 	}
 	haChan := make(chan haResult, 1)
 	go func() {
+		slog.Debug("Starting background Home Assistant discovery")
 		instances, err := resolver.DiscoverHomeAssistant(ctx)
+		if err != nil {
+			slog.Debug("Background HA discovery failed", "error", err)
+		} else {
+			slog.Debug("Background HA discovery complete", "count", len(instances))
+		}
 		haChan <- haResult{instances, err}
 	}()
 
@@ -83,6 +96,7 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
+	slog.Debug("Selected installation mode", "mode", mode)
 
 	reportsBoot, runsDaemon := GetModeFlags(mode)
 
@@ -92,7 +106,9 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 	}
 	globalInfoChan := make(chan globalInfo, 1)
 	go func() {
+		slog.Debug("Starting background global FQDN resolution", "hostname", hostname)
 		fqdn := resolver.GetFQDN(hostname, nil)
+		slog.Debug("Background global FQDN resolution complete", "fqdn", fqdn)
 		globalInfoChan <- globalInfo{fqdn}
 	}()
 
@@ -105,12 +121,15 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 		return nil, ctx.Err()
 	}
 	selectedIface := interfaces[ifaceIdx]
+	slog.Debug("Selected network interface", "interface", selectedIface.Name, "mac", selectedIface.HardwareAddr.String())
 
 	// 4. Host Address
 	ips, broadcasts := resolver.GetIPInfo(selectedIface)
+	slog.Debug("Interface IP info", "ips", ips, "broadcasts", broadcasts)
 
 	// Local FQDN resolution (fast on Windows, just a local check)
 	localFQDN := resolver.GetFQDN(hostname, &selectedIface)
+	slog.Debug("Local FQDN resolution result", "fqdn", localFQDN)
 
 	var globalFQDN string
 	select {
@@ -123,6 +142,7 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 		s.Stop("Network information resolved", 0)
 		globalFQDN = res.fqdn
 	}
+	slog.Debug("Global FQDN resolution result", "fqdn", globalFQDN)
 
 	hostAddress := tap.Select(ctx, tap.SelectOptions[string]{
 		Message: "Host Address (Used for communication with the daemon)",
@@ -131,6 +151,7 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
+	slog.Debug("Selected host address", "address", hostAddress)
 
 	// 5. Daemon Port
 	var AgentPort int
@@ -155,6 +176,7 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 			return nil, ctx.Err()
 		}
 		AgentPort, _ = strconv.Atoi(portStr)
+		slog.Debug("Selected daemon port", "port", AgentPort)
 	}
 
 	// 6. WOL Address
@@ -165,6 +187,7 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
+	slog.Debug("Selected WOL broadcast address", "address", WolBroadcastAddress)
 
 	var grubWaitTime int
 	if reportsBoot {
@@ -181,6 +204,7 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 			return nil, ctx.Err()
 		}
 		grubWaitTime, _ = strconv.Atoi(waitStr)
+		slog.Debug("Selected GRUB wait time", "seconds", grubWaitTime)
 	} else {
 		grubConfigPath = ""
 	}
@@ -209,6 +233,7 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 	if totalURLs == 1 {
 		// Single URL fallback
 		haURL = discovered[0].URLs[0]
+		slog.Debug("Single Home Assistant instance discovered, using it", "url", haURL)
 	} else if len(discovered) > 0 {
 		// 1. Instance Selection
 		var instOpts []tap.SelectOption[int]
@@ -228,6 +253,7 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 
 		if instIdx != -1 {
 			selectedInst := discovered[instIdx]
+			slog.Debug("Selected Home Assistant instance", "name", selectedInst.Name)
 
 			// 2. Agent URL Selection
 			var agentOpts []tap.SelectOption[string]
@@ -246,6 +272,7 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 			if ctx.Err() != nil {
 				return nil, ctx.Err()
 			}
+			slog.Debug("Selected Home Assistant URL", "url", haURL)
 
 			// 3. GRUB URL Selection (only if Agent is HTTPS)
 			if strings.HasPrefix(haURL, "https://") {
@@ -264,6 +291,7 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 					if ctx.Err() != nil {
 						return nil, ctx.Err()
 					}
+					slog.Debug("Selected GRUB HTTP URL", "url", grubURL)
 				}
 			}
 		}
@@ -280,6 +308,7 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
+		slog.Debug("Manually entered Home Assistant URL", "url", haURL)
 	}
 
 	// 9. HA Webhook ID
@@ -292,6 +321,7 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
+	slog.Debug("Home Assistant Webhook ID provided and validated")
 
 	return AssembleConfig(hostAddress, selectedIface.HardwareAddr.String(), WolBroadcastAddress, haURL, haWebhook, AgentPort, reportsBoot, grubWaitTime, grubConfigPath, grubURL), nil
 }

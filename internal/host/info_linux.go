@@ -4,6 +4,7 @@ package host
 
 import (
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"strings"
@@ -13,6 +14,7 @@ func isPhysicalInterface(inf net.Interface) bool {
 	virtualInterfaces := []string{"veth", "docker", "br-", "virbr", "vmnet", "vboxnet"}
 	for _, prefix := range virtualInterfaces {
 		if strings.HasPrefix(inf.Name, prefix) {
+			slog.Debug("Interface is virtual (skipping)", "name", inf.Name, "prefix", prefix)
 			return false
 		}
 	}

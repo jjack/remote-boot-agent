@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -25,17 +26,22 @@ var osMkdirAll = os.MkdirAll
 var ErrElevated = errors.New("elevated")
 
 func performInstall(cmd *cobra.Command, deps *CommandDeps, cfgFile string, token string) error {
+	slog.Debug("Starting installation process", "config", cfgFile)
 	mgr, err := deps.Manager(cmd.Context())
 	if err != nil {
+		slog.Debug("Failed to get service manager", "error", err)
 		return err
 	}
+	slog.Debug("Using service manager", "manager", mgr.Name())
 
 	if err := mgr.CheckPermissions(cmd.Context()); err != nil {
+		slog.Debug("Permission check failed", "error", err)
 		return err
 	}
 
 	absConfig, err := filepath.Abs(cfgFile)
 	if err != nil {
+		slog.Debug("Failed to resolve absolute config path", "path", cfgFile, "error", err)
 		return fmt.Errorf("failed to resolve config path: %w", err)
 	}
 
@@ -60,7 +66,9 @@ func performInstall(cmd *cobra.Command, deps *CommandDeps, cfgFile string, token
 		tap.Message("Installing into grub...", tap.MessageOptions{
 			Hint: warning,
 		})
+		slog.Debug("Installing GRUB script", "mac", opts.TargetMAC, "url", opts.TargetURL, "waitTime", opts.WaitTimeSeconds)
 		if err := deps.Grub.Setup(cmd.Context(), opts); err != nil {
+			slog.Debug("GRUB setup failed", "error", err)
 			return fmt.Errorf("failed to install grub: %w", err)
 		}
 
@@ -73,31 +81,42 @@ func performInstall(cmd *cobra.Command, deps *CommandDeps, cfgFile string, token
 		rep := reporter.New(deps.Config, deps.Grub, mgrName)
 
 		if token != "" {
+			slog.Debug("Registering daemon with token")
 			if err := rep.RegisterDaemon(cmd.Context(), token); err != nil {
+				slog.Debug("Daemon registration failed", "error", err)
 				return err
 			}
 		}
 
+		slog.Debug("Pushing boot options to HA")
 		if err := rep.PushBootOptions(cmd.Context()); err != nil {
+			slog.Debug("Failed to push boot options", "error", err)
 			return err
 		}
 		tap.Message("Successfully pushed initial state to Home Assistant.")
 	}
 
 	tap.Message(fmt.Sprintf("Installing into service manager: %s", mgr.Name()))
+	slog.Debug("Configuring service manager")
 	if err := mgr.Configure(cmd.Context(), deps.Config); err != nil {
+		slog.Debug("Service manager configuration failed", "error", err)
 		return fmt.Errorf("failed to configure service: %w", err)
 	}
 
+	slog.Debug("Installing service", "configPath", absConfig)
 	if err := mgr.Install(cmd.Context(), absConfig); err != nil {
+		slog.Debug("Service installation failed", "error", err)
 		return fmt.Errorf("failed to install manager: %w", err)
 	}
 
 	tap.Message("Starting service...")
+	slog.Debug("Starting service")
 	if err := mgr.Start(cmd.Context()); err != nil {
+		slog.Debug("Service start failed", "error", err)
 		return fmt.Errorf("failed to start service: %v", err)
 	}
 
+	slog.Debug("Installation completed successfully")
 	tap.Message("Installation completed successfully.")
 
 	return nil

@@ -3,6 +3,7 @@ package grub
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"os"
 )
 
@@ -24,6 +25,7 @@ func (g *Grub) DiscoverConfigPath(ctx context.Context) (string, error) {
 func findConfig() (string, error) {
 	for _, path := range knownConfigPaths {
 		if _, err := os.Stat(path); err == nil {
+			slog.Debug("Found GRUB config at", "path", path)
 			return path, nil
 		}
 	}

@@ -34,7 +34,6 @@ func (g *Grub) GetBootOptions(ctx context.Context) ([]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to locate grub config: %w", err)
 		}
-		slog.Debug("Found GRUB config at", slog.String("path", grubPath))
 	}
 
 	file, err := os.Open(grubPath)

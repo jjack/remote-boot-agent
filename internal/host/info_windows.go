@@ -4,6 +4,7 @@ package host
 
 import (
 	"fmt"
+	"log/slog"
 	"net"
 	"strings"
 	"unsafe"
@@ -18,6 +19,7 @@ func isPhysicalInterface(inf net.Interface) bool {
 	// GetIfEntry2Ex is used as a replacement for GetIfEntry2.
 	// Level 0 corresponds to MibIfEntryNormal.
 	if err := windows.GetIfEntry2Ex(0, &row); err != nil {
+		slog.Debug("Failed to get interface entry. Assuming it is physical.", "name", inf.Name, "error", err)
 		return true // Fallback to true if we can't determine
 	}
 

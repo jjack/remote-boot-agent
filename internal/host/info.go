@@ -3,6 +3,7 @@ package host
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 )
@@ -26,14 +27,17 @@ var (
 // isWOLCapableInterface checks if the given network interface is suitable for WOL (has a MAC address, is up, is not loopback, and is not virtual).
 func isWOLCapableInterface(inf net.Interface) bool {
 	if len(inf.HardwareAddr) == 0 {
+		slog.Debug("Interface has no MAC address (skipping)", "name", inf.Name)
 		return false
 	}
 
 	if inf.Flags&net.FlagUp == 0 {
+		slog.Debug("Interface is not up (skipping)", "name", inf.Name)
 		return false
 	}
 
 	if inf.Flags&net.FlagLoopback != 0 {
+		slog.Debug("Interface is loopback (skipping)", "name", inf.Name)
 		return false
 	}
 
@@ -49,7 +53,9 @@ func GetWOLInterfaces() ([]net.Interface, error) {
 
 	var wolIfaces []net.Interface
 	for _, inf := range interfaces {
+		slog.Debug("Checking to see if interface is suitable for WOL", "name", inf.Name)
 		if isWOLCapableInterface(inf) {
+			slog.Debug("Interface is suitable for WOL", "name", inf.Name)
 			wolIfaces = append(wolIfaces, inf)
 		}
 	}
@@ -64,7 +70,7 @@ func GetWOLInterfaces() ([]net.Interface, error) {
 func getLastIP(ipnet *net.IPNet) net.IP {
 	ip := ipnet.IP.To4()
 	if ip == nil {
-		return nil // IPv6 doesn't use subnet broadcasts for WOL
+		return nil
 	}
 
 	mask := ipnet.Mask
@@ -81,6 +87,7 @@ func getLastIP(ipnet *net.IPNet) net.IP {
 	for i := 0; i < 4; i++ {
 		last[i] = ip[i] | ^mask[i]
 	}
+	slog.Debug("Computed broadcast address", "broadcast", last.String(), "ip", ip.String(), "mask", mask.String())
 	return last
 }
 
