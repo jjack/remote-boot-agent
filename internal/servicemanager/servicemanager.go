@@ -14,6 +14,7 @@ type Manager interface {
 	IsInstalled(ctx context.Context) (bool, error)
 	CheckPermissions(ctx context.Context) error
 	Install(ctx context.Context, configPath string) error
+	Preview(ctx context.Context, configPath string) (string, error)
 	Uninstall(ctx context.Context) error
 	Start(ctx context.Context) error
 	Stop(ctx context.Context) error

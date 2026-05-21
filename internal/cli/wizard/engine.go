@@ -18,7 +18,6 @@ const (
 	ModeDaemonBoth     = "Daemon (Remote shutdown + Report boot options)"
 	ModeDaemonShutdown = "Daemon (Remote shutdown only)"
 	ModeHookOnly       = "Shutdown hook (Report boot options only)"
-	ModeDryRun         = "Dry Run (Preview configuration only)"
 )
 
 // GetModeOptions returns the available installation modes based on whether a GRUB config was found.
@@ -28,20 +27,17 @@ func GetModeOptions(grubConfigPath string) []tap.SelectOption[string] {
 			{Value: ModeDaemonBoth, Label: ModeDaemonBoth},
 			{Value: ModeDaemonShutdown, Label: ModeDaemonShutdown},
 			{Value: ModeHookOnly, Label: ModeHookOnly},
-			{Value: ModeDryRun, Label: ModeDryRun},
 		}
 	}
 	return []tap.SelectOption[string]{
 		{Value: ModeDaemonShutdown, Label: ModeDaemonShutdown},
-		{Value: ModeDryRun, Label: ModeDryRun},
 	}
 }
 
 // GetModeFlags converts a selected mode string into boolean flags.
-func GetModeFlags(mode string) (reportsBoot, runsDaemon, isDryRun bool) {
-	isDryRun = mode == ModeDryRun
-	reportsBoot = mode == ModeDaemonBoth || mode == ModeHookOnly || mode == ModeDryRun
-	runsDaemon = mode == ModeDaemonBoth || mode == ModeDaemonShutdown || mode == ModeDryRun
+func GetModeFlags(mode string) (reportsBoot, runsDaemon bool) {
+	reportsBoot = mode == ModeDaemonBoth || mode == ModeHookOnly
+	runsDaemon = mode == ModeDaemonBoth || mode == ModeDaemonShutdown
 	return
 }
 

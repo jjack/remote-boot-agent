@@ -215,6 +215,36 @@ func TestConfig_ToYAML_DefaultGrub(t *testing.T) {
 	}
 }
 
+func TestConfig_ToYAML_NoMutation(t *testing.T) {
+	cfg := &Config{
+		HomeAssistant: HomeAssistantConfig{
+			WebhookID: "original-webhook-id",
+		},
+		Grub: &GrubConfig{
+			WaitTimeSeconds: DefaultGrubWaitSeconds,
+		},
+		WakeOnLan: &WakeOnLanConfig{
+			Address: DefaultWolBroadcastAddress,
+			Port:    DefaultWolBroadcastPort,
+		},
+	}
+
+	_, err := cfg.ToYAML(true, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if cfg.HomeAssistant.WebhookID != "original-webhook-id" {
+		t.Errorf("expected original WebhookID to remain unchanged, got %s", cfg.HomeAssistant.WebhookID)
+	}
+	if cfg.Grub.WaitTimeSeconds != DefaultGrubWaitSeconds {
+		t.Errorf("expected original WaitTimeSeconds to remain %d, got %d", DefaultGrubWaitSeconds, cfg.Grub.WaitTimeSeconds)
+	}
+	if cfg.WakeOnLan.Address != DefaultWolBroadcastAddress {
+		t.Errorf("expected original WOL address to remain %s, got %s", DefaultWolBroadcastAddress, cfg.WakeOnLan.Address)
+	}
+}
+
 func TestLoad_MalformedYAML(t *testing.T) {
 	tempDir := t.TempDir()
 	cfgPath := filepath.Join(tempDir, "config.yaml")

@@ -46,6 +46,9 @@ func (m *mockServiceManager) CheckPermissions(ctx context.Context) error { retur
 func (m *mockServiceManager) Install(ctx context.Context, configPath string) error {
 	return m.installErr
 }
+func (m *mockServiceManager) Preview(ctx context.Context, configPath string) (string, error) {
+	return "preview", nil
+}
 func (m *mockServiceManager) Uninstall(ctx context.Context) error { return m.uninstallErr }
 func (m *mockServiceManager) Start(ctx context.Context) error     { return m.startErr }
 func (m *mockServiceManager) Stop(ctx context.Context) error      { return m.stopErr }

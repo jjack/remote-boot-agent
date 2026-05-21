@@ -39,7 +39,7 @@ func generateWaitList(seconds int) string {
 
 // Setup creates a GRUB remote boot agent script in /etc/grub.d and updates the GRUB config.
 func (g *Grub) Setup(ctx context.Context, opts SetupOptions) error {
-	content, err := g.generateScript(opts)
+	content, err := g.GenerateScript(opts)
 	if err != nil {
 		return err
 	}
@@ -67,7 +67,7 @@ func (g *Grub) Setup(ctx context.Context, opts SetupOptions) error {
 
 // CheckDrift returns true if the installed GRUB script differs from what the current options would generate.
 func (g *Grub) CheckDrift(opts SetupOptions) (bool, error) {
-	expected, err := g.generateScript(opts)
+	expected, err := g.GenerateScript(opts)
 	if err != nil {
 		return false, err
 	}
@@ -83,7 +83,7 @@ func (g *Grub) CheckDrift(opts SetupOptions) (bool, error) {
 	return string(actual) != expected, nil
 }
 
-func (g *Grub) generateScript(opts SetupOptions) (string, error) {
+func (g *Grub) GenerateScript(opts SetupOptions) (string, error) {
 	u, err := url.Parse(opts.TargetURL)
 	if err != nil || u.Scheme == "" || u.Host == "" {
 		return "", ErrInvalidHAURL

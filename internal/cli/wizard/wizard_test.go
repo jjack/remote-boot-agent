@@ -142,7 +142,7 @@ func TestGenerateConfigSurvey_HostnameError(t *testing.T) {
 		return "", errors.New("hostname error")
 	}
 
-	_, _, err := generateConfigInteractive(ctx, deps, false, 0)
+	_, err := generateConfigInteractive(ctx, deps, false, 0, false)
 	if err == nil || !strings.Contains(err.Error(), "hostname error") {
 		t.Errorf("expected hostname error, got %v", err)
 	}
@@ -155,7 +155,7 @@ func TestGenerateConfigSurvey_InterfacesError(t *testing.T) {
 		return nil, errors.New("interfaces error")
 	}
 
-	_, _, err := generateConfigInteractive(ctx, deps, false, 0)
+	_, err := generateConfigInteractive(ctx, deps, false, 0, false)
 	if err == nil || !strings.Contains(err.Error(), "interfaces error") {
 		t.Errorf("expected interfaces error, got %v", err)
 	}

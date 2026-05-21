@@ -62,6 +62,10 @@ func (w *WindowsService) Install(ctx context.Context, configPath string) error {
 	return nil
 }
 
+func (w *WindowsService) Preview(ctx context.Context, configPath string) (string, error) {
+	return "Service installation and configuration are handled automatically by the Windows installer (MSI).", nil
+}
+
 func (w *WindowsService) Uninstall(ctx context.Context) error {
 	// Service uninstallation is handled by the WiX installer (MSI)
 	return nil

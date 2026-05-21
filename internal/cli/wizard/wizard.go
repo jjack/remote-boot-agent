@@ -30,36 +30,36 @@ type SurveyDeps interface {
 }
 
 var (
-	RunGenerateSurvey func(context.Context, SurveyDeps, bool, int) (*config.Config, bool, error) = generateConfigInteractive
+	RunGenerateSurvey func(context.Context, SurveyDeps, bool, int, bool) (*config.Config, error) = generateConfigInteractive
 
 	ErrAborted = errors.New("setup aborted")
 )
 
-func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall bool, currentPort int) (*config.Config, bool, error) {
+func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall bool, currentPort int, isDryRun bool) (*config.Config, error) {
 	resolver := deps.GetSystemResolver()
 
 	// 0. Overwrite Confirmation
-	if isReinstall {
+	if isReinstall && !isDryRun {
 		overwrite := tap.Confirm(ctx, tap.ConfirmOptions{
 			Message:      "GrubStation is already configured. Do you want to re-run setup and overwrite the existing configuration?",
 			InitialValue: false,
 		})
 		if ctx.Err() != nil {
-			return nil, false, ctx.Err()
+			return nil, ctx.Err()
 		}
 		if !overwrite {
-			return nil, false, ErrAborted
+			return nil, ErrAborted
 		}
 	}
 
 	// 1. Initial Discovery
 	hostname, err := resolver.DetectSystemHostname()
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	interfaces, err := resolver.GetWOLInterfaces()
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
 	grubConfigPath, _ := resolver.DiscoverGrubConfig(ctx)
@@ -81,10 +81,10 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 		Options: GetModeOptions(grubConfigPath),
 	})
 	if ctx.Err() != nil {
-		return nil, false, ctx.Err()
+		return nil, ctx.Err()
 	}
 
-	reportsBoot, runsDaemon, isDryRun := GetModeFlags(mode)
+	reportsBoot, runsDaemon := GetModeFlags(mode)
 
 	// Background: Gather Host Info (FQDN can be slow on Windows)
 	type hostInfo struct {
@@ -102,7 +102,7 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 		Options: BuildIfaceOptions(interfaces, resolver.GetIPInfo),
 	})
 	if ctx.Err() != nil {
-		return nil, false, ctx.Err()
+		return nil, ctx.Err()
 	}
 	selectedIface := interfaces[ifaceIdx]
 
@@ -126,7 +126,7 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 		Options: BuildHostOptions(hostname, fqdn, ips),
 	})
 	if ctx.Err() != nil {
-		return nil, false, ctx.Err()
+		return nil, ctx.Err()
 	}
 
 	// 5. Daemon Port
@@ -149,7 +149,7 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 			},
 		})
 		if ctx.Err() != nil {
-			return nil, false, ctx.Err()
+			return nil, ctx.Err()
 		}
 		AgentPort, _ = strconv.Atoi(portStr)
 	}
@@ -160,7 +160,7 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 		Options: BuildWolOptions(ips, broadcasts),
 	})
 	if ctx.Err() != nil {
-		return nil, false, ctx.Err()
+		return nil, ctx.Err()
 	}
 
 	var grubWaitTime int
@@ -175,7 +175,7 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 			},
 		})
 		if ctx.Err() != nil {
-			return nil, false, ctx.Err()
+			return nil, ctx.Err()
 		}
 		grubWaitTime, _ = strconv.Atoi(waitStr)
 	} else {
@@ -220,7 +220,7 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 			Options: instOpts,
 		})
 		if ctx.Err() != nil {
-			return nil, false, ctx.Err()
+			return nil, ctx.Err()
 		}
 
 		if instIdx != -1 {
@@ -241,7 +241,7 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 				Options: agentOpts,
 			})
 			if ctx.Err() != nil {
-				return nil, false, ctx.Err()
+				return nil, ctx.Err()
 			}
 
 			// 3. GRUB URL Selection (only if Agent is HTTPS)
@@ -259,7 +259,7 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 						Options: grubOpts,
 					})
 					if ctx.Err() != nil {
-						return nil, false, ctx.Err()
+						return nil, ctx.Err()
 					}
 				}
 			}
@@ -275,7 +275,7 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 			},
 		})
 		if ctx.Err() != nil {
-			return nil, false, ctx.Err()
+			return nil, ctx.Err()
 		}
 	}
 
@@ -287,10 +287,10 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 		},
 	})
 	if ctx.Err() != nil {
-		return nil, false, ctx.Err()
+		return nil, ctx.Err()
 	}
 
-	return AssembleConfig(hostAddress, selectedIface.HardwareAddr.String(), WolBroadcastAddress, haURL, haWebhook, AgentPort, reportsBoot, grubWaitTime, grubConfigPath, grubURL), isDryRun, nil
+	return AssembleConfig(hostAddress, selectedIface.HardwareAddr.String(), WolBroadcastAddress, haURL, haWebhook, AgentPort, reportsBoot, grubWaitTime, grubConfigPath, grubURL), nil
 }
 
 // AssembleConfig is a pure function that populates the Config struct.

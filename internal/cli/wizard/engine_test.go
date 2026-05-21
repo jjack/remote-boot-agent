@@ -12,15 +12,15 @@ import (
 func TestGetModeOptions(t *testing.T) {
 	t.Run("with grub config", func(t *testing.T) {
 		opts := GetModeOptions("/boot/grub/grub.cfg")
-		if len(opts) != 4 {
-			t.Errorf("expected 4 options, got %d", len(opts))
+		if len(opts) != 3 {
+			t.Errorf("expected 3 options, got %d", len(opts))
 		}
 	})
 
 	t.Run("without grub config", func(t *testing.T) {
 		opts := GetModeOptions("")
-		if len(opts) != 2 {
-			t.Errorf("expected 2 options, got %d", len(opts))
+		if len(opts) != 1 {
+			t.Errorf("expected 1 option, got %d", len(opts))
 		}
 	})
 }
@@ -30,19 +30,17 @@ func TestGetModeFlags(t *testing.T) {
 		mode        string
 		reportsBoot bool
 		runsDaemon  bool
-		isDryRun    bool
 	}{
-		{ModeDaemonBoth, true, true, false},
-		{ModeDaemonShutdown, false, true, false},
-		{ModeHookOnly, true, false, false},
-		{ModeDryRun, true, true, true},
+		{ModeDaemonBoth, true, true},
+		{ModeDaemonShutdown, false, true},
+		{ModeHookOnly, true, false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.mode, func(t *testing.T) {
-			reports, runs, dry := GetModeFlags(tt.mode)
-			if reports != tt.reportsBoot || runs != tt.runsDaemon || dry != tt.isDryRun {
-				t.Errorf("GetModeFlags(%s) = (%v, %v, %v), want (%v, %v, %v)", tt.mode, reports, runs, dry, tt.reportsBoot, tt.runsDaemon, tt.isDryRun)
+			reports, runs := GetModeFlags(tt.mode)
+			if reports != tt.reportsBoot || runs != tt.runsDaemon {
+				t.Errorf("GetModeFlags(%s) = (%v, %v), want (%v, %v)", tt.mode, reports, runs, tt.reportsBoot, tt.runsDaemon)
 			}
 		})
 	}

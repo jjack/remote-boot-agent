@@ -45,6 +45,9 @@ func (m *mockInstallInitSystem) Install(ctx context.Context, configPath string) 
 	m.configPath = configPath
 	return m.installErr
 }
+func (m *mockInstallInitSystem) Preview(ctx context.Context, configPath string) (string, error) {
+	return "[Unit]\nDescription=Mock Service", nil
+}
 func (m *mockInstallInitSystem) Uninstall(ctx context.Context) error { return nil }
 func (m *mockInstallInitSystem) Start(ctx context.Context) error     { return m.startErr }
 func (m *mockInstallInitSystem) Stop(ctx context.Context) error      { return nil }
@@ -82,10 +85,10 @@ func TestSetupCmd_Execute(t *testing.T) {
 				tempGrub := t.TempDir() + "/grub.cfg"
 				_ = os.WriteFile(tempGrub, []byte(""), 0o644)
 				deps.Grub = &grub.Grub{ConfigPath: tempGrub}
-				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int) (*config.Config, bool, error) {
+				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int, isDryRun bool) (*config.Config, error) {
 					return &config.Config{
 						HomeAssistant: config.HomeAssistantConfig{URL: ts.URL, WebhookID: "fake"},
-					}, false, nil
+					}, nil
 				}
 			},
 			wantInstall: true,
@@ -95,15 +98,16 @@ func TestSetupCmd_Execute(t *testing.T) {
 			},
 		},
 		{
-			name: "Success - Dry Run from Survey",
+			name: "Success - Dry Run from CLI",
 			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem, resolver *mockSystemResolver) {
 				tempGrub := t.TempDir() + "/grub.cfg"
 				_ = os.WriteFile(tempGrub, []byte(""), 0o644)
 				deps.Grub = &grub.Grub{ConfigPath: tempGrub}
-				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int) (*config.Config, bool, error) {
-					return &config.Config{}, true, nil
+				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int, isDryRun bool) (*config.Config, error) {
+					return &config.Config{}, nil
 				}
 			},
+			args:        []string{"--dry-run", "--config", "dummy.yaml"},
 			wantInstall: false,
 			wantOut: []string{
 				"Dry run completed. Configuration shown above was not saved.",
@@ -126,11 +130,19 @@ func TestSetupCmd_Execute(t *testing.T) {
 				tempGrub := t.TempDir() + "/grub.cfg"
 				_ = os.WriteFile(tempGrub, []byte(""), 0o644)
 				deps.Grub = &grub.Grub{ConfigPath: tempGrub}
-				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int) (*config.Config, bool, error) {
-					return nil, false, errors.New("survey failed")
+				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int, isDryRun bool) (*config.Config, error) {
+					return nil, errors.New("survey failed")
 				}
 			},
 			wantErr:     "survey failed",
+			wantInstall: false,
+		},
+		{
+			name: "Error - Permission Denied before Wizard",
+			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem, resolver *mockSystemResolver) {
+				initMock.permissionErr = errors.New("permission denied: root required")
+			},
+			wantErr:     "permission denied: root required",
 			wantInstall: false,
 		},
 		{
@@ -139,8 +151,8 @@ func TestSetupCmd_Execute(t *testing.T) {
 				tempGrub := t.TempDir() + "/grub.cfg"
 				_ = os.WriteFile(tempGrub, []byte(""), 0o644)
 				deps.Grub = &grub.Grub{ConfigPath: tempGrub}
-				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int) (*config.Config, bool, error) {
-					return &config.Config{}, false, nil
+				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int, isDryRun bool) (*config.Config, error) {
+					return &config.Config{}, nil
 				}
 				osMkdirAll = func(path string, perm os.FileMode) error { return errors.New("mkdirall failed") }
 				t.Cleanup(func() { osMkdirAll = func(path string, perm os.FileMode) error { return nil } })
@@ -154,8 +166,8 @@ func TestSetupCmd_Execute(t *testing.T) {
 				tempGrub := t.TempDir() + "/grub.cfg"
 				_ = os.WriteFile(tempGrub, []byte(""), 0o644)
 				deps.Grub = &grub.Grub{ConfigPath: tempGrub}
-				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int) (*config.Config, bool, error) {
-					return &config.Config{}, false, nil
+				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int, isDryRun bool) (*config.Config, error) {
+					return &config.Config{}, nil
 				}
 				resolver.saveConfigFunc = func(cfg *config.Config, path string) error {
 					return errors.New("save config failed")
@@ -170,10 +182,10 @@ func TestSetupCmd_Execute(t *testing.T) {
 				tempGrub := t.TempDir() + "/grub.cfg"
 				_ = os.WriteFile(tempGrub, []byte(""), 0o644)
 				deps.Grub = &grub.Grub{ConfigPath: tempGrub} // will fail since not mocked correctly
-				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int) (*config.Config, bool, error) {
+				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int, isDryRun bool) (*config.Config, error) {
 					return &config.Config{
 						Daemon: config.DaemonConfig{ReportBootOptions: true},
-					}, false, nil
+					}, nil
 				}
 			},
 			wantErr:     "failed to install grub",
@@ -208,10 +220,10 @@ func TestSetupCmd_Execute(t *testing.T) {
 				_ = os.WriteFile(tempGrub, []byte("menuentry 'OS' {}"), 0o644)
 				deps.Grub = &grub.Grub{ConfigPath: tempGrub}
 
-				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int) (*config.Config, bool, error) {
+				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int, isDryRun bool) (*config.Config, error) {
 					return &config.Config{
 						HomeAssistant: config.HomeAssistantConfig{URL: ts.URL, WebhookID: "fake"},
-					}, false, nil
+					}, nil
 				}
 			},
 			wantInstall: true,
@@ -242,10 +254,10 @@ func TestSetupCmd_Execute(t *testing.T) {
 				// Make GetBootOptions fail to trigger error in PushBootOptions
 				deps.Grub = &grub.Grub{ConfigPath: "/non/existent/path"}
 
-				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int) (*config.Config, bool, error) {
+				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int, isDryRun bool) (*config.Config, error) {
 					return &config.Config{
 						HomeAssistant: config.HomeAssistantConfig{URL: "http://fake", WebhookID: "fake"},
-					}, false, nil
+					}, nil
 				}
 			},
 			wantErr:     "request to home assistant failed",
@@ -258,8 +270,8 @@ func TestSetupCmd_Execute(t *testing.T) {
 		{
 			name: "Setup Aborted on Overwrite No",
 			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem, resolver *mockSystemResolver) {
-				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int) (*config.Config, bool, error) {
-					return nil, false, wizard.ErrAborted
+				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int, isDryRun bool) (*config.Config, error) {
+					return nil, wizard.ErrAborted
 				}
 			},
 			wantInstall: false,
@@ -483,11 +495,14 @@ func (m *mockSystemResolver) SaveConfig(cfg *config.Config, path string) error {
 
 type mockSurveyService struct{}
 
-func (m *mockSurveyService) Name() string                                            { return "systemd" }
-func (m *mockSurveyService) IsActive(ctx context.Context) bool                       { return true }
-func (m *mockSurveyService) IsInstalled(ctx context.Context) (bool, error)           { return false, nil }
-func (m *mockSurveyService) CheckPermissions(ctx context.Context) error              { return nil }
-func (m *mockSurveyService) Install(ctx context.Context, configPath string) error    { return nil }
+func (m *mockSurveyService) Name() string                                         { return "systemd" }
+func (m *mockSurveyService) IsActive(ctx context.Context) bool                    { return true }
+func (m *mockSurveyService) IsInstalled(ctx context.Context) (bool, error)        { return false, nil }
+func (m *mockSurveyService) CheckPermissions(ctx context.Context) error           { return nil }
+func (m *mockSurveyService) Install(ctx context.Context, configPath string) error { return nil }
+func (m *mockSurveyService) Preview(ctx context.Context, configPath string) (string, error) {
+	return "[Unit]\nDescription=Mock Service", nil
+}
 func (m *mockSurveyService) Uninstall(ctx context.Context) error                     { return nil }
 func (m *mockSurveyService) Start(ctx context.Context) error                         { return nil }
 func (m *mockSurveyService) Stop(ctx context.Context) error                          { return nil }

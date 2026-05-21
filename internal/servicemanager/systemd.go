@@ -70,35 +70,12 @@ func (s *Systemd) CheckPermissions(ctx context.Context) error {
 }
 
 func (s *Systemd) Install(ctx context.Context, configPath string) error {
-	absConfig, err := filepath.Abs(configPath)
+	content, err := s.Preview(ctx, configPath)
 	if err != nil {
-		return fmt.Errorf("failed to get absolute config path: %w", err)
+		return err
 	}
 
-	execPath, err := osExecutable()
-	if err != nil {
-		return fmt.Errorf("failed to get executable path: %w", err)
-	}
-
-	tmpl, err := template.New("systemd").Parse(systemdTemplate)
-	if err != nil {
-		return fmt.Errorf("failed to parse systemd template: %w", err)
-	}
-
-	data := struct {
-		ExecPath   string
-		ConfigPath string
-	}{
-		ExecPath:   execPath,
-		ConfigPath: absConfig,
-	}
-
-	var content strings.Builder
-	if err := tmpl.Execute(&content, data); err != nil {
-		return fmt.Errorf("failed to execute systemd template: %w", err)
-	}
-
-	if err := osWriteFile(systemdServicePath, []byte(content.String()), 0o644); err != nil {
+	if err := osWriteFile(systemdServicePath, []byte(content), 0o644); err != nil {
 		return fmt.Errorf("failed to write systemd service file (are you running as root?): %w", err)
 	}
 
@@ -111,6 +88,38 @@ func (s *Systemd) Install(ctx context.Context, configPath string) error {
 	}
 
 	return nil
+}
+
+func (s *Systemd) Preview(ctx context.Context, configPath string) (string, error) {
+	absConfig, err := filepath.Abs(configPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to get absolute config path: %w", err)
+	}
+
+	execPath, err := osExecutable()
+	if err != nil {
+		return "", fmt.Errorf("failed to get executable path: %w", err)
+	}
+
+	tmpl, err := template.New("systemd").Parse(systemdTemplate)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse systemd template: %w", err)
+	}
+
+	data := struct {
+		ExecPath   string
+		ConfigPath string
+	}{
+		ExecPath:   execPath,
+		ConfigPath: absConfig,
+	}
+
+	var content strings.Builder
+	if err := tmpl.Execute(&content, data); err != nil {
+		return "", fmt.Errorf("failed to execute systemd template: %w", err)
+	}
+
+	return content.String(), nil
 }
 
 func (s *Systemd) Uninstall(ctx context.Context) error {

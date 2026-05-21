@@ -372,7 +372,7 @@ func TestGrub_CheckDrift(t *testing.T) {
 	}
 
 	// 2. File matches (no drift)
-	content, err := g.generateScript(opts)
+	content, err := g.GenerateScript(opts)
 	if err != nil {
 		t.Fatalf("failed to generate script: %v", err)
 	}
@@ -416,7 +416,7 @@ func TestGrub_GenerateScript_Errors(t *testing.T) {
 	g := &Grub{}
 
 	// Invalid URL
-	_, err := g.generateScript(SetupOptions{TargetURL: "://bad"})
+	_, err := g.GenerateScript(SetupOptions{TargetURL: "://bad"})
 	if !errors.Is(err, ErrInvalidHAURL) {
 		t.Fatalf("expected ErrInvalidHAURL, got %v", err)
 	}
@@ -425,7 +425,7 @@ func TestGrub_GenerateScript_Errors(t *testing.T) {
 	originalTemplate := grubTemplate
 	defer func() { grubTemplate = originalTemplate }()
 	grubTemplate = "{{ invalid"
-	_, err = g.generateScript(SetupOptions{TargetURL: "http://hass.local"})
+	_, err = g.GenerateScript(SetupOptions{TargetURL: "http://hass.local"})
 	if err == nil || !strings.Contains(err.Error(), "failed to parse grub template") {
 		t.Fatalf("expected template parse error, got %v", err)
 	}

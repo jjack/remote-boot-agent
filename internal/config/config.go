@@ -72,6 +72,8 @@ func (c *Config) ToYAML(maskWebhook bool, exhaustive bool) (string, error) {
 	// If sub-configs are empty or default, nil them out so omitempty works
 	if !exhaustive {
 		if displayCfg.WakeOnLan != nil {
+			wol := *displayCfg.WakeOnLan
+			displayCfg.WakeOnLan = &wol
 			if displayCfg.WakeOnLan.Address == DefaultWolBroadcastAddress {
 				displayCfg.WakeOnLan.Address = ""
 			}
@@ -83,6 +85,8 @@ func (c *Config) ToYAML(maskWebhook bool, exhaustive bool) (string, error) {
 			}
 		}
 		if displayCfg.Grub != nil {
+			grub := *displayCfg.Grub
+			displayCfg.Grub = &grub
 			if displayCfg.Grub.WaitTimeSeconds == DefaultGrubWaitSeconds {
 				displayCfg.Grub.WaitTimeSeconds = 0
 			}
@@ -92,8 +96,10 @@ func (c *Config) ToYAML(maskWebhook bool, exhaustive bool) (string, error) {
 		}
 	}
 
-	if maskWebhook {
+	if maskWebhook && len(displayCfg.HomeAssistant.WebhookID) > 8 {
 		displayCfg.HomeAssistant.WebhookID = displayCfg.HomeAssistant.WebhookID[:4] + "..." + displayCfg.HomeAssistant.WebhookID[len(displayCfg.HomeAssistant.WebhookID)-4:]
+	} else if maskWebhook && displayCfg.HomeAssistant.WebhookID != "" {
+		displayCfg.HomeAssistant.WebhookID = "***"
 	}
 
 	out, err := yaml.Marshal(displayCfg)

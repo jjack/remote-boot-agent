@@ -140,6 +140,7 @@ func IsInstalled(ctx context.Context, deps *CommandDeps) (bool, error) {
 
 func NewSetupCmd(deps *CommandDeps) *cobra.Command {
 	var applyOnly bool
+	var dryRun bool
 
 	cmd := &cobra.Command{
 		Use:   "setup",
@@ -178,8 +179,15 @@ func NewSetupCmd(deps *CommandDeps) *cobra.Command {
 				return performInstall(cmd, deps, cfgPath, "")
 			}
 
-			if _, err := ensureSupport(cmd.Context(), deps); err != nil {
+			mgr, err := ensureSupport(cmd.Context(), deps)
+			if err != nil {
 				return err
+			}
+
+			if !dryRun {
+				if err := mgr.CheckPermissions(cmd.Context()); err != nil {
+					return err
+				}
 			}
 
 			cfgPath, err := cmd.Flags().GetString("config")
@@ -196,8 +204,10 @@ func NewSetupCmd(deps *CommandDeps) *cobra.Command {
 				}
 			}
 
-			if err := osMkdirAll(filepath.Dir(cfgPath), 0o755); err != nil {
-				return fmt.Errorf("failed to create config directory: %w", err)
+			if !dryRun {
+				if err := osMkdirAll(filepath.Dir(cfgPath), 0o755); err != nil {
+					return fmt.Errorf("failed to create config directory: %w", err)
+				}
 			}
 
 			// Clear the terminal screen before starting the interactive wizard
@@ -209,7 +219,7 @@ func NewSetupCmd(deps *CommandDeps) *cobra.Command {
 			if _, err := os.Stat(cfgPath); err == nil {
 				isConfigured = true
 			}
-			cfg, isDryRun, err := wizard.RunGenerateSurvey(cmd.Context(), surveyDepsAdapter{deps: deps}, isConfigured, currentPort)
+			cfg, err := wizard.RunGenerateSurvey(cmd.Context(), surveyDepsAdapter{deps: deps}, isConfigured, currentPort, dryRun)
 			if err != nil {
 				if errors.Is(err, wizard.ErrAborted) {
 					tap.Message("Setup aborted.")
@@ -219,7 +229,37 @@ func NewSetupCmd(deps *CommandDeps) *cobra.Command {
 				return err
 			}
 
-			if isDryRun {
+			if dryRun {
+				wizard.PrintConfigSummary(cmd, cfg, cfgPath)
+
+				if svcPreview, err := mgr.Preview(cmd.Context(), cfgPath); err == nil {
+					tap.Box(svcPreview, fmt.Sprintf(" %s Service Preview ", mgr.Name()), tap.BoxOptions{
+						ContentPadding: 2,
+					})
+				}
+
+				if cfg.Daemon.ReportBootOptions {
+					waitTime := config.DefaultGrubWaitSeconds
+					targetURL := cfg.HomeAssistant.URL
+					if cfg.Grub != nil {
+						waitTime = cfg.Grub.WaitTimeSeconds
+						if cfg.Grub.URL != "" {
+							targetURL = cfg.Grub.URL
+						}
+					}
+					grubPreview, err := deps.Grub.GenerateScript(grub.SetupOptions{
+						TargetMAC:       cfg.Host.MACAddress,
+						TargetURL:       targetURL,
+						AuthToken:       cfg.HomeAssistant.WebhookID,
+						WaitTimeSeconds: waitTime,
+					})
+					if err == nil {
+						tap.Box(grubPreview, " GRUB Script Preview (/etc/grub.d/99_grubstation) ", tap.BoxOptions{
+							ContentPadding: 2,
+						})
+					}
+				}
+
 				tap.Message("Dry run completed. Configuration shown above was not saved.")
 				tap.Outro("Dry run finished")
 				return nil
@@ -261,6 +301,7 @@ func NewSetupCmd(deps *CommandDeps) *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&applyOnly, "apply", false, "Skip survey and install service based on current config")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview configuration without saving or installing")
 
 	return cmd
 }
