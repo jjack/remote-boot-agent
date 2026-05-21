@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.8.0](https://github.com/jjack/grubstation/compare/v1.7.1...v1.8.0) (2026-05-21)
+
+
+### Features
+
+* adding config previews to dry-run; moving dry-run to a flag; fixing some linux permissions issues ([374621a](https://github.com/jjack/grubstation/commit/374621a8734ea324721229cd7373a70ec7e2cc49))
+* generating hostname for windows ([c7662f5](https://github.com/jjack/grubstation/commit/c7662f5300879ecbb984de6471335974f89d1f2b))
+
+
+### Bug Fixes
+
+* back to zeroconf for mdns discovery. this now works on windows for realsies ([8100a69](https://github.com/jjack/grubstation/commit/8100a69e243fbb7676a75f8b964d8ef3c85f3adc))
+* removing unnecessary condition for .msi release ([5e42d50](https://github.com/jjack/grubstation/commit/5e42d500bfb26d723498327ab161f8fcae21e016))
+
 ## [1.7.1](https://github.com/jjack/grubstation/compare/v1.7.0...v1.7.1) (2026-05-19)
 
 
