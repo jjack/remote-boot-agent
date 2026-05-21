@@ -4,17 +4,14 @@ package servicemanager
 
 import (
 	"context"
-	"fmt"
-	"os"
-	"path/filepath"
 
+	"github.com/jjack/grubstation/internal/config"
 	"golang.org/x/sys/windows"
-	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/mgr"
 )
 
 const (
-	windowsServiceName        = "GrubStation"
+	WindowsServiceName        = "GrubStation"
 	windowsServiceDisplayName = "GrubStation"
 	windowsServiceDescription = "Persistent daemon for reporting boot options and remote shutdown"
 )
@@ -39,13 +36,14 @@ func (w *WindowsService) IsActive(ctx context.Context) bool {
 }
 
 func (w *WindowsService) IsInstalled(ctx context.Context) (bool, error) {
-	m, err := mgr.Connect()
+	h, err := windows.OpenSCManager(nil, nil, windows.SC_MANAGER_CONNECT)
 	if err != nil {
 		return false, err
 	}
+	m := &mgr.Mgr{Handle: h}
 	defer m.Disconnect()
 
-	s, err := m.OpenService(windowsServiceName)
+	s, err := m.OpenService(WindowsServiceName)
 	if err == nil {
 		s.Close()
 		return true, nil
@@ -54,91 +52,37 @@ func (w *WindowsService) IsInstalled(ctx context.Context) (bool, error) {
 }
 
 func (w *WindowsService) CheckPermissions(ctx context.Context) error {
-	m, err := mgr.Connect()
-	if err != nil {
-		return fmt.Errorf("this operation requires administrator privileges: %w", err)
-	}
-	m.Disconnect()
+	// In the Native WiX flow, the TUI doesn't need admin permissions
+	// because the MSI handled the privileged tasks.
 	return nil
 }
 
 func (w *WindowsService) Install(ctx context.Context, configPath string) error {
-	exepath, err := os.Executable()
-	if err != nil {
-		return err
-	}
-
-	m, err := mgr.Connect()
-	if err != nil {
-		return err
-	}
-	defer m.Disconnect()
-
-	s, err := m.OpenService(windowsServiceName)
-	if err == nil {
-		s.Close()
-		return fmt.Errorf("service %s already exists", windowsServiceName)
-	}
-
-	absConfig, err := filepath.Abs(configPath)
-	if err != nil {
-		return err
-	}
-
-	// The service will run: "C:\path\to\grubstation.exe" serve --config "C:\path\to\config.yaml"
-	args := []string{"serve", "--config", absConfig}
-	s, err = m.CreateService(windowsServiceName, exepath, mgr.Config{
-		DisplayName:    windowsServiceDisplayName,
-		Description:    windowsServiceDescription,
-		StartType:      mgr.StartAutomatic,
-		BinaryPathName: exepath,
-	}, args...)
-	if err != nil {
-		return err
-	}
-	defer s.Close()
-
+	// Service installation is handled by the WiX installer (MSI)
 	return nil
 }
 
 func (w *WindowsService) Uninstall(ctx context.Context) error {
-	m, err := mgr.Connect()
-	if err != nil {
-		return err
-	}
-	defer m.Disconnect()
-
-	s, err := m.OpenService(windowsServiceName)
-	if err != nil {
-		return nil // already gone
-	}
-	defer s.Close()
-
-	err = s.Delete()
-	if err != nil {
-		return err
-	}
-
+	// Service uninstallation is handled by the WiX installer (MSI)
 	return nil
 }
 
 func (w *WindowsService) Start(ctx context.Context) error {
-	m, err := mgr.Connect()
+	h, err := windows.OpenSCManager(nil, nil, windows.SC_MANAGER_CONNECT)
 	if err != nil {
-		return err
+		return nil
 	}
-	defer m.Disconnect()
+	defer windows.CloseServiceHandle(h)
 
-	s, err := m.OpenService(windowsServiceName)
+	s, err := windows.OpenService(h, windows.StringToUTF16Ptr(WindowsServiceName), windows.SERVICE_START|windows.SERVICE_QUERY_STATUS)
 	if err != nil {
-		return err
+		return nil
 	}
-	defer s.Close()
+	defer windows.CloseServiceHandle(s)
 
-	err = s.Start()
+	err = windows.StartService(s, 0, nil)
 	if err != nil {
-		// If the service is already running, we consider it a success
-		if errno, ok := err.(windows.Errno); ok && errno == windows.ERROR_SERVICE_ALREADY_RUNNING {
+		if errno, ok := err.(windows.Errno); ok && (errno == windows.ERROR_SERVICE_ALREADY_RUNNING || errno == windows.ERROR_ACCESS_DENIED) {
 			return nil
 		}
 		return err
@@ -147,26 +91,30 @@ func (w *WindowsService) Start(ctx context.Context) error {
 }
 
 func (w *WindowsService) Stop(ctx context.Context) error {
-	m, err := mgr.Connect()
+	h, err := windows.OpenSCManager(nil, nil, windows.SC_MANAGER_CONNECT)
 	if err != nil {
+		return nil
+	}
+	defer windows.CloseServiceHandle(h)
+
+	s, err := windows.OpenService(h, windows.StringToUTF16Ptr(WindowsServiceName), windows.SERVICE_STOP|windows.SERVICE_QUERY_STATUS)
+	if err != nil {
+		return nil
+	}
+	defer windows.CloseServiceHandle(s)
+
+	var status windows.SERVICE_STATUS
+	err = windows.ControlService(s, windows.SERVICE_CONTROL_STOP, &status)
+	if err != nil {
+		if errno, ok := err.(windows.Errno); ok && errno == windows.ERROR_ACCESS_DENIED {
+			return nil
+		}
 		return err
 	}
-	defer m.Disconnect()
 
-	s, err := m.OpenService(windowsServiceName)
-	if err != nil {
-		return err
-	}
-	defer s.Close()
-
-	status, err := s.Control(svc.Stop)
-	if err != nil {
-		return err
-	}
-
-	if status.State != svc.Stopped {
-		return fmt.Errorf("failed to stop service, state: %d", status.State)
-	}
-
+	return nil
+}
+func (w *WindowsService) Configure(ctx context.Context, cfg *config.Config) error {
+	// Firewall configuration is handled by the WiX installer (MSI) using a program-based rule
 	return nil
 }

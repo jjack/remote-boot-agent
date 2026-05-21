@@ -48,6 +48,9 @@ func (m *mockInstallInitSystem) Install(ctx context.Context, configPath string) 
 func (m *mockInstallInitSystem) Uninstall(ctx context.Context) error { return nil }
 func (m *mockInstallInitSystem) Start(ctx context.Context) error     { return m.startErr }
 func (m *mockInstallInitSystem) Stop(ctx context.Context) error      { return nil }
+func (m *mockInstallInitSystem) Configure(ctx context.Context, cfg *config.Config) error {
+	return nil
+}
 
 func TestSetupCmd_Execute(t *testing.T) {
 	oldRunGenerateSurvey := wizard.RunGenerateSurvey
@@ -480,14 +483,15 @@ func (m *mockSystemResolver) SaveConfig(cfg *config.Config, path string) error {
 
 type mockSurveyService struct{}
 
-func (m *mockSurveyService) Name() string                                         { return "systemd" }
-func (m *mockSurveyService) IsActive(ctx context.Context) bool                    { return true }
-func (m *mockSurveyService) IsInstalled(ctx context.Context) (bool, error)        { return false, nil }
-func (m *mockSurveyService) CheckPermissions(ctx context.Context) error           { return nil }
-func (m *mockSurveyService) Install(ctx context.Context, configPath string) error { return nil }
-func (m *mockSurveyService) Uninstall(ctx context.Context) error                  { return nil }
-func (m *mockSurveyService) Start(ctx context.Context) error                      { return nil }
-func (m *mockSurveyService) Stop(ctx context.Context) error                       { return nil }
+func (m *mockSurveyService) Name() string                                            { return "systemd" }
+func (m *mockSurveyService) IsActive(ctx context.Context) bool                       { return true }
+func (m *mockSurveyService) IsInstalled(ctx context.Context) (bool, error)           { return false, nil }
+func (m *mockSurveyService) CheckPermissions(ctx context.Context) error              { return nil }
+func (m *mockSurveyService) Install(ctx context.Context, configPath string) error    { return nil }
+func (m *mockSurveyService) Uninstall(ctx context.Context) error                     { return nil }
+func (m *mockSurveyService) Start(ctx context.Context) error                         { return nil }
+func (m *mockSurveyService) Stop(ctx context.Context) error                          { return nil }
+func (m *mockSurveyService) Configure(ctx context.Context, cfg *config.Config) error { return nil }
 
 func TestIsInstalled(t *testing.T) {
 	initMock := &mockInstallInitSystem{isInstalledVal: true}

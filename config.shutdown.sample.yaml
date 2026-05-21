@@ -1,7 +1,6 @@
 # Host configuration details
 host:
-  # The IP address, FQDN, or hostname used for agent communication and for
-  # ping checks
+  # The IP address, FQDN, or hostname (used for agent communication)
   address:     "192.168.1.50"
   # The MAC address of the network interface for Wake-on-LAN (WOL)
   mac:         "00:11:22:33:44:55"

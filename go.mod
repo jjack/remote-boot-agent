@@ -3,7 +3,6 @@ module github.com/jjack/grubstation
 go 1.26.2
 
 require (
-	github.com/brutella/dnssd v1.2.14
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/grandcat/zeroconf v1.0.1-0.20230119201135-e4f60f8407b1
 	github.com/spf13/cobra v1.10.2
@@ -29,8 +28,6 @@ require (
 	github.com/spf13/afero v1.15.0 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
-	github.com/vishvananda/netlink v1.2.1-beta.2 // indirect
-	github.com/vishvananda/netns v0.0.0-20200728191858-db3c7e526aae // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/mod v0.34.0 // indirect
 	golang.org/x/net v0.53.0 // indirect

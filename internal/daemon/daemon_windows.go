@@ -10,10 +10,9 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/jjack/grubstation/internal/servicemanager"
 	"golang.org/x/sys/windows/svc"
 )
-
-const windowsServiceName = "GrubStation"
 
 // Run starts the daemon, optionally as a Windows service.
 func (d *Daemon) Run(ctx context.Context) error {
@@ -23,7 +22,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 	}
 
 	if isService {
-		return svc.Run(windowsServiceName, &serviceHandler{d: d, ctx: ctx})
+		return svc.Run(servicemanager.WindowsServiceName, &serviceHandler{d: d, ctx: ctx})
 	}
 
 	// Not a service, handle signals manually

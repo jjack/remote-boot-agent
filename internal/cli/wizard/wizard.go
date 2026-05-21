@@ -39,10 +39,9 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 	resolver := deps.GetSystemResolver()
 
 	// 0. Overwrite Confirmation
-	installed, err := deps.IsInstalled(ctx)
-	if err == nil && installed {
+	if isReinstall {
 		overwrite := tap.Confirm(ctx, tap.ConfirmOptions{
-			Message:      "GrubStation is already installed as a service. Do you want to re-run setup and overwrite the existing configuration?",
+			Message:      "GrubStation is already configured. Do you want to re-run setup and overwrite the existing configuration?",
 			InitialValue: false,
 		})
 		if ctx.Err() != nil {
@@ -87,6 +86,16 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 
 	reportsBoot, runsDaemon, isDryRun := GetModeFlags(mode)
 
+	// Background: Gather Host Info (FQDN can be slow on Windows)
+	type hostInfo struct {
+		fqdn string
+	}
+	hostInfoChan := make(chan hostInfo, 1)
+	go func() {
+		fqdn := resolver.GetFQDN(hostname)
+		hostInfoChan <- hostInfo{fqdn}
+	}()
+
 	// 3. Network Interface
 	ifaceIdx := tap.Select(ctx, tap.SelectOptions[int]{
 		Message: "Available Network Interface",
@@ -99,9 +108,21 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 
 	// 4. Host Address
 	ips, broadcasts := resolver.GetIPInfo(selectedIface)
-	fqdn := resolver.GetFQDN(hostname)
+
+	var fqdn string
+	select {
+	case res := <-hostInfoChan:
+		fqdn = res.fqdn
+	default:
+		s := tap.NewSpinner(tap.SpinnerOptions{})
+		s.Start("Resolving network information...")
+		res := <-hostInfoChan
+		s.Stop("Network information resolved", 0)
+		fqdn = res.fqdn
+	}
+
 	hostAddress := tap.Select(ctx, tap.SelectOptions[string]{
-		Message: "Host Address (Used for ping checks and communication with the daemon)",
+		Message: "Host Address (Used for communication with the daemon)",
 		Options: BuildHostOptions(hostname, fqdn, ips),
 	})
 	if ctx.Err() != nil {

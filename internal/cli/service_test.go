@@ -49,6 +49,9 @@ func (m *mockServiceManager) Install(ctx context.Context, configPath string) err
 func (m *mockServiceManager) Uninstall(ctx context.Context) error { return m.uninstallErr }
 func (m *mockServiceManager) Start(ctx context.Context) error     { return m.startErr }
 func (m *mockServiceManager) Stop(ctx context.Context) error      { return m.stopErr }
+func (m *mockServiceManager) Configure(ctx context.Context, cfg *config.Config) error {
+	return nil
+}
 
 func TestServiceInstallCmd(t *testing.T) {
 	initReg := servicemanager.NewRegistry()

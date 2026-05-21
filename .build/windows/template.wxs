@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" 
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:fw="http://wixtoolset.org/schemas/v4/wxs/firewall"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
     <Package Name="GrubStation" 
              Language="1033" 
              Version="$(var.Version)" 
@@ -12,10 +15,10 @@
         <!-- UI Configuration: Allow user to select installation directory, but skip the EULA -->
         <UI>
             <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLDIR" />
-            <!-- Hijack Welcome screen 'Next' button to jump straight to InstallDirDlg -->
-            <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="InstallDirDlg" Order="99" Condition="1" />
-            <!-- Hijack InstallDirDlg 'Back' button to return directly to WelcomeDlg -->
-            <Publish Dialog="InstallDirDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" Order="99" Condition="1" />
+            
+            <!-- Skip EULA: Redirect WelcomeDlg Next to InstallDirDlg -->
+            <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="InstallDirDlg" Order="5" Condition="1" />
+            <Publish Dialog="InstallDirDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" Order="5" Condition="1" />
 
             <Publish Dialog="MaintenanceTypeDlg" Control="ChangeButton" Event="NewDialog" Value="VerifyReadyDlg" />
 
@@ -27,14 +30,9 @@
                      Condition="NOT REMOVE=&quot;ALL&quot;" />
         </UI>
 
-        <!-- Custom Actions to enable 'Change' and 'Repair' -->
-        <CustomAction Id="SetARPNOMODIFY" Property="ARPNOMODIFY" Value="" />
-        <CustomAction Id="SetARPNOREPAIR" Property="ARPNOREPAIR" Value="" />
-
-        <InstallUISequence>
-            <Custom Action="SetARPNOMODIFY" After="AppSearch" />
-            <Custom Action="SetARPNOREPAIR" After="AppSearch" />
-        </InstallUISequence>
+        <!-- Setting ARPNOMODIFY to {} (empty in SetProperty) enables the 'Modify' button in Add/Remove Programs -->
+        <SetProperty Id="ARPNOMODIFY" Value="{}" After="AppSearch" Sequence="first" />
+        <SetProperty Id="ARPNOREPAIR" Value="1" After="AppSearch" Sequence="first" />
 
         <Property Id="ARPCOMMENTS" Value="Agent to manage bare-metal OS booting via Home Assistant and WOL" />
         <Property Id="ARPCONTACT" Value="Jeremy Jack" />
@@ -46,12 +44,12 @@
             <Directory Id="INSTALLDIR" Name="GrubStation" />
         </StandardDirectory>
 
-        <StandardDirectory Id="ProgramMenuFolder">
-            <Directory Id="ApplicationProgramsFolder" Name="GrubStation"/>
+        <StandardDirectory Id="CommonAppDataFolder">
+            <Directory Id="ProgramDataGrubStation" Name="GrubStation" />
         </StandardDirectory>
 
-        <StandardDirectory Id="AppDataFolder">
-            <Directory Id="AppDataGrubStation" Name="GrubStation" />
+        <StandardDirectory Id="ProgramMenuFolder">
+            <Directory Id="ApplicationProgramsFolder" Name="GrubStation"/>
         </StandardDirectory>
 
         <DirectoryRef Id="ApplicationProgramsFolder">
@@ -68,20 +66,24 @@
             </Component>
         </DirectoryRef>
 
-        <DirectoryRef Id="AppDataGrubStation">
-            <Component Id="CleanupConfig" Guid="*">
+        <DirectoryRef Id="ProgramDataGrubStation">
+            <Component Id="CleanupConfig" Guid="06e23b2c-8067-4a0b-8092-23c2186835a2">
+                <!-- Ensure the folder is created with write permissions for everyone 
+                     so the user-mode TUI can save the config -->
+                <CreateFolder>
+                    <Permission User="Everyone" GenericAll="yes" />
+                </CreateFolder>
                 <RemoveFile Id="RemoveConfig" Name="*" On="uninstall" />
                 <RemoveFolder Id="RemoveConfigDir" On="uninstall" />
-                <RegistryValue Root="HKCU" Key="Software\JeremyJack\GrubStation" Name="config_cleaned" Type="integer" Value="1" KeyPath="yes" />
+                <RegistryValue Root="HKLM" Key="Software\JeremyJack\GrubStation" Name="config_cleaned" Type="integer" Value="1" KeyPath="yes" />
             </Component>
         </DirectoryRef>
 
         <ComponentGroup Id="ProductComponents" Directory="INSTALLDIR">
             <Component Id="Executable" Guid="*">
                 <File Id="GrubStationEXE" Name="grubstation.exe" Source="$(var.BinaryPath)" KeyPath="yes" />
-                
+
                 <!-- Native Windows Service Installation -->
-                <!-- We use the default AppData path for the config to keep it consistent -->
                 <ServiceInstall Id="ServiceInstall_GrubStation"
                                 Type="ownProcess"
                                 Name="GrubStation"
@@ -90,14 +92,26 @@
                                 Start="auto"
                                 Account="LocalSystem"
                                 ErrorControl="normal"
-                                Arguments="serve" />
+                                Arguments="serve">
+                    <!-- Grant Authenticated Users permission to start/stop the service
+                         so the user-mode TUI can start it after setup -->
+                    <util:PermissionEx User="Authenticated Users" ServiceStart="yes" ServiceStop="yes" ServiceQueryStatus="yes" />
+                </ServiceInstall>
 
-                <!-- Stop/remove on uninstall. We don't start on install because the TUI creates the config later. -->
                 <ServiceControl Id="ServiceControl_GrubStation" 
                                 Name="GrubStation" 
                                 Stop="both" 
                                 Remove="uninstall" 
                                 Wait="yes" />
+
+                <!-- Program-based Firewall Exception (Port Agnostic) -->
+                <!-- We set IgnoreFailure="yes" and Profile="all" to ensure the installer doesn't rollback if firewall service is tricky -->
+                <fw:FirewallException Id="GrubStationFW"
+                                      Name="GrubStation"
+                                      Description="Allow inbound traffic for GrubStation daemon"
+                                      Profile="all"
+                                      IgnoreFailure="yes"
+                                      File="GrubStationEXE" />
             </Component>
         </ComponentGroup>
 
@@ -106,11 +120,6 @@
                       FileRef="GrubStationEXE" 
                       ExeCommand="setup" 
                       Return="asyncNoWait" />
-
-        <InstallExecuteSequence>
-            <Custom Action="SetARPNOMODIFY" After="AppSearch" />
-            <Custom Action="SetARPNOREPAIR" After="AppSearch" />
-        </InstallExecuteSequence>
 
         <Feature Id="ProductFeature" Title="GrubStation" Level="1">
             <ComponentGroupRef Id="ProductComponents" />

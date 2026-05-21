@@ -8,5 +8,9 @@ import (
 )
 
 func DefaultConfigPath() string {
-	return filepath.Join(os.Getenv("AppData"), "GrubStation", "config.yaml")
+	programData := os.Getenv("ProgramData")
+	if programData == "" {
+		programData = "C:\\ProgramData"
+	}
+	return filepath.Join(programData, "GrubStation", "config.yaml")
 }

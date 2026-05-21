@@ -188,6 +188,9 @@ type mockManager struct {
 
 func (m *mockManager) Name() string                      { return m.name }
 func (m *mockManager) IsActive(ctx context.Context) bool { return m.active }
+func (m *mockManager) Configure(ctx context.Context, cfg *config.Config) error {
+	return nil
+}
 
 func TestNewServeCmd_WithServiceManager(t *testing.T) {
 	oldNewServe := newServe

@@ -3,6 +3,8 @@ package servicemanager
 import (
 	"context"
 	"testing"
+
+	"github.com/jjack/grubstation/internal/config"
 )
 
 func TestErrors(t *testing.T) {
@@ -16,14 +18,15 @@ type mockMgr struct {
 	active bool
 }
 
-func (m *mockMgr) Name() string                                         { return m.name }
-func (m *mockMgr) IsActive(ctx context.Context) bool                    { return m.active }
-func (m *mockMgr) IsInstalled(ctx context.Context) (bool, error)        { return false, nil }
-func (m *mockMgr) CheckPermissions(ctx context.Context) error           { return nil }
-func (m *mockMgr) Install(ctx context.Context, configPath string) error { return nil }
-func (m *mockMgr) Uninstall(ctx context.Context) error                  { return nil }
-func (m *mockMgr) Start(ctx context.Context) error                      { return nil }
-func (m *mockMgr) Stop(ctx context.Context) error                       { return nil }
+func (m *mockMgr) Name() string                                            { return m.name }
+func (m *mockMgr) IsActive(ctx context.Context) bool                       { return m.active }
+func (m *mockMgr) IsInstalled(ctx context.Context) (bool, error)           { return false, nil }
+func (m *mockMgr) CheckPermissions(ctx context.Context) error              { return nil }
+func (m *mockMgr) Install(ctx context.Context, configPath string) error    { return nil }
+func (m *mockMgr) Uninstall(ctx context.Context) error                     { return nil }
+func (m *mockMgr) Start(ctx context.Context) error                         { return nil }
+func (m *mockMgr) Stop(ctx context.Context) error                          { return nil }
+func (m *mockMgr) Configure(ctx context.Context, cfg *config.Config) error { return nil }
 
 func TestRegistry(t *testing.T) {
 	r := NewRegistry()

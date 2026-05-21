@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"text/template"
+
+	"github.com/jjack/grubstation/internal/config"
 )
 
 const systemdName = "systemd"
@@ -137,5 +139,9 @@ func (s *Systemd) Stop(ctx context.Context) error {
 	if out, err := execCommand(ctx, "systemctl", "stop", "grubstation.service").CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to stop systemd service: %s", string(out))
 	}
+	return nil
+}
+
+func (s *Systemd) Configure(ctx context.Context, cfg *config.Config) error {
 	return nil
 }

@@ -31,13 +31,7 @@ func performInstall(cmd *cobra.Command, deps *CommandDeps, cfgFile string, token
 	}
 
 	if err := mgr.CheckPermissions(cmd.Context()); err != nil {
-		if runtime.GOOS == "windows" {
-			// On Windows, the MSI handles the service installation as SYSTEM.
-			// The TUI only needs to write the config (which is in AppData),
-			// so we don't need to elevate here anymore.
-		} else {
-			return err
-		}
+		return err
 	}
 
 	absConfig, err := filepath.Abs(cfgFile)
@@ -91,26 +85,17 @@ func performInstall(cmd *cobra.Command, deps *CommandDeps, cfgFile string, token
 	}
 
 	tap.Message(fmt.Sprintf("Installing into service manager: %s", mgr.Name()))
-	if runtime.GOOS != "windows" {
-		if err := mgr.Install(cmd.Context(), absConfig); err != nil {
-			return fmt.Errorf("failed to install manager: %w", err)
-		}
+	if err := mgr.Configure(cmd.Context(), deps.Config); err != nil {
+		return fmt.Errorf("failed to configure service: %w", err)
+	}
 
-		tap.Message("Starting service...")
-		if err := mgr.Start(cmd.Context()); err != nil {
-			return fmt.Errorf("failed to start service: %v", err)
-		}
-	} else {
-		tap.Message("Service management handled by Windows Installer.")
-		// We still need to restart the service to pick up the new config
-		tap.Message("Restarting service...")
-		_ = mgr.Stop(cmd.Context())
-		if err := mgr.Start(cmd.Context()); err != nil {
-			// We don't fail here because the service might not be installed yet
-			// if the user is running setup for the first time before the MSI finishes.
-			// However, in our flow, MSI installs the service first.
-			tap.Message(fmt.Sprintf("Note: could not restart service (may not be installed yet): %v", err))
-		}
+	if err := mgr.Install(cmd.Context(), absConfig); err != nil {
+		return fmt.Errorf("failed to install manager: %w", err)
+	}
+
+	tap.Message("Starting service...")
+	if err := mgr.Start(cmd.Context()); err != nil {
+		return fmt.Errorf("failed to start service: %v", err)
 	}
 
 	tap.Message("Installation completed successfully.")
@@ -172,13 +157,19 @@ func NewSetupCmd(deps *CommandDeps) *cobra.Command {
 
 			if runtime.GOOS == "windows" {
 				defer func() {
-					if err != nil && err != ErrElevated {
+					if err == ErrElevated {
+						return
+					}
+
+					if err != nil {
 						tap.Outro(fmt.Sprintf("Error: %v", err))
 					}
-					if applyOnly || (err != nil && err != ErrElevated) {
-						fmt.Println("\nPress Enter to exit...")
-						_, _ = bufio.NewReader(os.Stdin).ReadBytes('\n')
-					}
+
+					// Always wait on Windows when running the setup wizard so the user can see the output.
+					// We tell the user they can close the window manually because stdin can be unreliable in some MSI-launched environments.
+					fmt.Print("\nSetup finished. You can now close this window.")
+					s := bufio.NewScanner(os.Stdin)
+					s.Scan()
 				}()
 			}
 
@@ -214,7 +205,11 @@ func NewSetupCmd(deps *CommandDeps) *cobra.Command {
 
 			tap.Intro("GrubStation Setup")
 
-			cfg, isDryRun, err := wizard.RunGenerateSurvey(cmd.Context(), surveyDepsAdapter{deps: deps}, true, currentPort)
+			isConfigured := false
+			if _, err := os.Stat(cfgPath); err == nil {
+				isConfigured = true
+			}
+			cfg, isDryRun, err := wizard.RunGenerateSurvey(cmd.Context(), surveyDepsAdapter{deps: deps}, isConfigured, currentPort)
 			if err != nil {
 				if errors.Is(err, wizard.ErrAborted) {
 					tap.Message("Setup aborted.")
