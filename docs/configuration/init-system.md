@@ -2,7 +2,8 @@
 
 `grubstation` runs as a persistent background service (daemon) to ensure that boot options are always up-to-date in Home Assistant and to handle remote shutdown requests.
 
-> **💡 Note:** The `sudo grubstation setup` command handles service installation automatically for both Linux and Windows.
+> [!NOTE]
+> The `grubstation setup` command handles service installation automatically for both Linux and Windows.
 
 ## 1. Cross-Platform Service Management
 
@@ -20,7 +21,7 @@ While you can use native tools (like `systemctl` or `sc`), the `grubstation` CLI
 
 ## 2. Linux (systemd)
 
-On most Linux distributions, `grubstation` is managed as a `systemd` service. The service file is located at `/etc/systemd/system/grubstation.service`.
+On Linux distributions, `grubstation` is managed as a `systemd` service. The service file is located at `/etc/systemd/system/grubstation.service`.
 
 ### Service Definition
 The service is configured to start after the network is online and restart automatically if it fails.

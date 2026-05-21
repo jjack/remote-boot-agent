@@ -38,7 +38,7 @@ jobs:
           wix eula accept wix7
           wix extension add WixToolset.Firewall.wixext WixToolset.UI.wixext WixToolset.Util.wixext -g
 
-      - uses: goreleaser/goreleaser-action@v7
+      - uses: goreleaser/goreleaser-action@v7.2.1
         with:
           version: 2.13.3
           args: release --clean
@@ -47,7 +47,7 @@ jobs:
           AcceptEula: wix7
 
       - name: Upload .msi to Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             dist/grubstation*.msi
