@@ -2,7 +2,8 @@
 
 `grubstation` runs as a persistent background service (daemon) to ensure that boot options are always up-to-date in Home Assistant and to handle remote shutdown requests.
 
-> **💡 Note:** The `grubstation setup` command handles service installation automatically for both Linux and Windows.
+> [!NOTE]
+> The `grubstation setup` command handles service installation automatically for both Linux and Windows.
 
 ## 1. Cross-Platform Service Management
 

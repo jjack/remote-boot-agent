@@ -14,7 +14,8 @@ This script:
 
 ## 2. Manual Installation
 
-> **💡 Note:** The `sudo grubstation setup` command handles this installation automatically. Manual configuration is only recommended for advanced users, troubleshooting, or for configuring motherboard-specific boot options.
+> [!NOTE]
+> The `sudo grubstation setup` command handles this installation automatically. Manual configuration is only recommended for advanced users, troubleshooting, or for configuring motherboard-specific boot options.
 
 
 If you need to install the hook manually, create a file at `/etc/grub.d/99_grubstation`:

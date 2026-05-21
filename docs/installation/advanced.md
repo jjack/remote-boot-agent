@@ -70,7 +70,8 @@ grubstation --version
 
 You should see the version information displayed. If you get a "command not found" error, ensure that `/usr/local/bin` is in your system's `PATH`.
 
-> **💡 Pro Tip:** If you are performing a manual installation, you can use `grubstation config init -o config.yaml` to quickly generate a template configuration file to get started.
+> [!TIP]
+> If you are performing a manual installation, you can use `grubstation config init -o config.yaml` to quickly generate a template configuration file to get started.
 
 ## Next Steps
 
