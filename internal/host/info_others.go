@@ -14,3 +14,8 @@ func isPhysicalInterface(inf net.Interface) bool {
 func Platform() string {
 	return runtime.GOOS
 }
+
+// GetFQDN attempts to resolve the Fully Qualified Domain Name for a given hostname.
+func GetFQDN(hostname string, _ *net.Interface) string {
+	return hostname
+}

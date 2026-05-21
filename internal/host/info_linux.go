@@ -25,3 +25,11 @@ func isPhysicalInterface(inf net.Interface) bool {
 func Platform() string {
 	return "linux"
 }
+
+// GetFQDN attempts to resolve the Fully Qualified Domain Name for a given hostname.
+func GetFQDN(hostname string, _ *net.Interface) string {
+	if cname, err := netLookupCNAME(hostname); err == nil && cname != "" {
+		return strings.TrimSuffix(cname, ".")
+	}
+	return hostname
+}

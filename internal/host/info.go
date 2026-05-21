@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"strings"
 )
 
 var (
@@ -118,12 +117,4 @@ func DetectHostname() (string, error) {
 		return "", fmt.Errorf("%w: %w", ErrDetectHostname, err)
 	}
 	return hostname, nil
-}
-
-// GetFQDN attempts to resolve the Fully Qualified Domain Name for a given hostname.
-func GetFQDN(hostname string) string {
-	if cname, err := netLookupCNAME(hostname); err == nil && cname != "" {
-		return strings.TrimSuffix(cname, ".")
-	}
-	return hostname
 }

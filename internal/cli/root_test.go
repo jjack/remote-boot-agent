@@ -33,7 +33,7 @@ func TestDefaultSystemResolver(t *testing.T) {
 		_, _ = resolver.GetIPInfo(net.Interface{})
 	}
 
-	_ = resolver.GetFQDN("localhost")
+	_ = resolver.GetFQDN("localhost", nil)
 
 	f, err := os.CreateTemp("", "test-config-*.yaml")
 	if err != nil {

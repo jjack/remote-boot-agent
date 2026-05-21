@@ -19,7 +19,7 @@ type mockSystemResolver struct {
 	detectSystemHostnameFunc  func() (string, error)
 	getWOLInterfacesFunc      func() ([]net.Interface, error)
 	getIPInfoFunc             func(inf net.Interface) ([]string, map[string]string)
-	getFQDNFunc               func(hostname string) string
+	getFQDNFunc               func(hostname string, inf *net.Interface) string
 	saveConfigFunc            func(cfg *config.Config, path string) error
 	discoverGrubConfigFunc    func(ctx context.Context) (string, error)
 }
@@ -60,9 +60,9 @@ func (m *mockSystemResolver) GetIPInfo(inf net.Interface) ([]string, map[string]
 	return []string{"192.168.1.100"}, map[string]string{"192.168.1.100": "192.168.1.255"}
 }
 
-func (m *mockSystemResolver) GetFQDN(hostname string) string {
+func (m *mockSystemResolver) GetFQDN(hostname string, inf *net.Interface) string {
 	if m.getFQDNFunc != nil {
-		return m.getFQDNFunc(hostname)
+		return m.getFQDNFunc(hostname, inf)
 	}
 	return "detected-host.local"
 }

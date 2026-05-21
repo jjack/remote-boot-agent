@@ -20,7 +20,7 @@ type SystemResolver interface {
 	DetectSystemHostname() (string, error)
 	GetWOLInterfaces() ([]net.Interface, error)
 	GetIPInfo(inf net.Interface) ([]string, map[string]string)
-	GetFQDN(hostname string) string
+	GetFQDN(hostname string, inf *net.Interface) string
 	DiscoverGrubConfig(ctx context.Context) (string, error)
 }
 
@@ -86,14 +86,14 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 
 	reportsBoot, runsDaemon := GetModeFlags(mode)
 
-	// Background: Gather Host Info (FQDN can be slow on Windows)
-	type hostInfo struct {
+	// Background: Global CNAME resolution (can be slow)
+	type globalInfo struct {
 		fqdn string
 	}
-	hostInfoChan := make(chan hostInfo, 1)
+	globalInfoChan := make(chan globalInfo, 1)
 	go func() {
-		fqdn := resolver.GetFQDN(hostname)
-		hostInfoChan <- hostInfo{fqdn}
+		fqdn := resolver.GetFQDN(hostname, nil)
+		globalInfoChan <- globalInfo{fqdn}
 	}()
 
 	// 3. Network Interface
@@ -109,21 +109,24 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 	// 4. Host Address
 	ips, broadcasts := resolver.GetIPInfo(selectedIface)
 
-	var fqdn string
+	// Local FQDN resolution (fast on Windows, just a local check)
+	localFQDN := resolver.GetFQDN(hostname, &selectedIface)
+
+	var globalFQDN string
 	select {
-	case res := <-hostInfoChan:
-		fqdn = res.fqdn
+	case res := <-globalInfoChan:
+		globalFQDN = res.fqdn
 	default:
 		s := tap.NewSpinner(tap.SpinnerOptions{})
 		s.Start("Resolving network information...")
-		res := <-hostInfoChan
+		res := <-globalInfoChan
 		s.Stop("Network information resolved", 0)
-		fqdn = res.fqdn
+		globalFQDN = res.fqdn
 	}
 
 	hostAddress := tap.Select(ctx, tap.SelectOptions[string]{
 		Message: "Host Address (Used for communication with the daemon)",
-		Options: BuildHostOptions(hostname, fqdn, ips),
+		Options: BuildHostOptions(hostname, globalFQDN, localFQDN, ips),
 	})
 	if ctx.Err() != nil {
 		return nil, ctx.Err()

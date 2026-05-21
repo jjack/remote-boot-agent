@@ -25,7 +25,7 @@ type SystemResolver interface {
 	DetectSystemHostname() (string, error)
 	GetWOLInterfaces() ([]net.Interface, error)
 	GetIPInfo(inf net.Interface) ([]string, map[string]string)
-	GetFQDN(hostname string) string
+	GetFQDN(hostname string, inf *net.Interface) string
 	SaveConfig(cfg *config.Config, path string) error
 	DiscoverGrubConfig(ctx context.Context) (string, error)
 }
@@ -47,7 +47,9 @@ func (d *DefaultSystemResolver) GetWOLInterfaces() ([]net.Interface, error) {
 func (d *DefaultSystemResolver) GetIPInfo(inf net.Interface) ([]string, map[string]string) {
 	return host.GetIPInfo(inf)
 }
-func (d *DefaultSystemResolver) GetFQDN(hostname string) string { return host.GetFQDN(hostname) }
+func (d *DefaultSystemResolver) GetFQDN(hostname string, inf *net.Interface) string {
+	return host.GetFQDN(hostname, inf)
+}
 func (d *DefaultSystemResolver) SaveConfig(cfg *config.Config, path string) error {
 	return config.Save(cfg, path)
 }

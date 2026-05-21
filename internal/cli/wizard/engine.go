@@ -57,14 +57,28 @@ func BuildIfaceOptions(interfaces []net.Interface, ipProvider func(net.Interface
 }
 
 // BuildHostOptions builds the selection options for the host address.
-func BuildHostOptions(hostname, fqdn string, ips []string) []tap.SelectOption[string] {
+func BuildHostOptions(hostname, globalFQDN, localFQDN string, ips []string) []tap.SelectOption[string] {
 	var opts []tap.SelectOption[string]
-	if fqdn != "" && fqdn != hostname {
-		opts = append(opts, tap.SelectOption[string]{Value: fqdn, Label: fqdn, Hint: "FQDN"})
+	seen := make(map[string]bool)
+
+	addOption := func(val, hint string) {
+		if val != "" && !seen[val] {
+			seen[val] = true
+			opts = append(opts, tap.SelectOption[string]{Value: val, Label: val, Hint: hint})
+		}
 	}
-	opts = append(opts, tap.SelectOption[string]{Value: hostname, Label: hostname, Hint: "Hostname"})
+
+	if localFQDN != "" {
+		addOption(localFQDN, "Local FQDN (from selected adapter)")
+	}
+	if globalFQDN != "" {
+		addOption(globalFQDN, "Global FQDN (via DNS)")
+	}
+
+	addOption(hostname, "Hostname")
+
 	for _, ip := range ips {
-		opts = append(opts, tap.SelectOption[string]{Value: ip, Label: ip, Hint: "IP Address [Ensure This is Static!]"})
+		addOption(ip, "IP Address [Ensure This is Static!]")
 	}
 	return opts
 }

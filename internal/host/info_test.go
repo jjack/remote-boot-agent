@@ -242,7 +242,7 @@ func TestGetFQDN(t *testing.T) {
 		return name + ".local.lan.", nil
 	}
 
-	fqdn := GetFQDN("my-host")
+	fqdn := GetFQDN("my-host", nil)
 	if fqdn != "my-host.local.lan" {
 		t.Errorf("expected my-host.local.lan, got %s", fqdn)
 	}
@@ -251,7 +251,7 @@ func TestGetFQDN(t *testing.T) {
 		return "", errors.New("lookup failed")
 	}
 
-	fqdn = GetFQDN("my-host")
+	fqdn = GetFQDN("my-host", nil)
 	if fqdn != "my-host" {
 		t.Errorf("expected fallback to short hostname 'my-host', got %s", fqdn)
 	}

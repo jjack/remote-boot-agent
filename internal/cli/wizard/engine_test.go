@@ -62,16 +62,26 @@ func TestBuildIfaceOptions_Pure(t *testing.T) {
 }
 
 func TestBuildHostOptions(t *testing.T) {
-	opts := BuildHostOptions("my-host", "my-host.local", []string{"192.168.1.50"})
+	opts := BuildHostOptions("my-host", "my-host.global", "my-host.local", []string{"192.168.1.50"})
 
-	if len(opts) != 3 {
-		t.Fatalf("expected 3 options, got %d", len(opts))
+	if len(opts) != 4 {
+		t.Fatalf("expected 4 options, got %d", len(opts))
 	}
 	if opts[0].Value != "my-host.local" {
 		t.Errorf("expected option 0 value to be my-host.local")
 	}
-	if opts[2].Value != "192.168.1.50" {
-		t.Errorf("expected option 2 value to be 192.168.1.50")
+	if opts[1].Value != "my-host.global" {
+		t.Errorf("expected option 1 value to be my-host.global")
+	}
+	if opts[3].Value != "192.168.1.50" {
+		t.Errorf("expected option 3 value to be 192.168.1.50")
+	}
+}
+
+func TestBuildHostOptions_Deduplication(t *testing.T) {
+	opts := BuildHostOptions("my-host", "my-host", "my-host", []string{"192.168.1.50"})
+	if len(opts) != 2 {
+		t.Errorf("expected 2 options after deduplication, got %d", len(opts))
 	}
 }
 
