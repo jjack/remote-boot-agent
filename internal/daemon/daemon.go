@@ -58,7 +58,7 @@ func New(cfg Config, meta Metadata, regHandler func(ctx context.Context, token s
 	}
 }
 
-// run contains the core daemon logic.
+// runShared contains the core daemon logic.
 func (d *Daemon) run(ctx context.Context) error {
 	token := d.Config.APIKey
 	if token == "" {

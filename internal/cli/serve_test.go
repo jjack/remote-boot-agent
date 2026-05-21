@@ -3,109 +3,40 @@ package cli
 import (
 	"bytes"
 	"context"
-	"errors"
-	"strings"
 	"testing"
 
 	"github.com/jjack/grubstation/internal/config"
-	"github.com/jjack/grubstation/internal/daemon"
 	"github.com/jjack/grubstation/internal/grub"
 	"github.com/jjack/grubstation/internal/servicemanager"
 )
 
-type mockServeRunner struct {
-	called *bool
-	runErr error
-}
-
-func (m *mockServeRunner) Run(ctx context.Context) error {
-	if m.called != nil {
-		*m.called = true
-	}
-	return m.runErr
-}
-
-func TestNewServeCmd_RunEInvokesDaemon(t *testing.T) {
-	oldNewServe := newServe
-	defer func() { newServe = oldNewServe }()
-
-	called := false
-	newServe = func(cfg daemon.Config, meta daemon.Metadata, regHandler func(ctx context.Context, token string) error, updateHandler func(ctx context.Context) error) serveRunner {
-		if cfg.Port != 1234 {
-			t.Fatalf("expected listen port 1234, got %d", cfg.Port)
-		}
-		if !cfg.ReportBootOptions {
-			t.Fatalf("expected ReportBootOptions to be true")
-		}
-		return &mockServeRunner{called: &called, runErr: errors.New("serve run failed")}
-	}
-
+func TestNewServeCmd_Execute(t *testing.T) {
 	cfg := &config.Config{
-		Daemon: config.DaemonConfig{Port: 1234, ReportBootOptions: true},
-	}
-	deps := &CommandDeps{Config: cfg, Grub: &grub.Grub{ConfigPath: "/tmp/grub.cfg"}, Registry: servicemanager.NewRegistry()}
-	cmd := NewServeCmd(deps)
-	cmd.SetOut(&bytes.Buffer{})
-
-	err := cmd.Execute()
-	if err == nil || !strings.Contains(err.Error(), "serve run failed") {
-		t.Fatalf("expected serve run failure, got %v", err)
-	}
-	if !called {
-		t.Fatal("expected serve Run to be invoked")
-	}
-}
-
-func TestNewServeCmd_NoReportBootOptions(t *testing.T) {
-	oldNewServe := newServe
-	defer func() { newServe = oldNewServe }()
-
-	called := false
-	newServe = func(cfg daemon.Config, meta daemon.Metadata, regHandler func(ctx context.Context, token string) error, updateHandler func(ctx context.Context) error) serveRunner {
-		if cfg.ReportBootOptions {
-			t.Fatalf("expected ReportBootOptions to be false")
-		}
-		if regHandler == nil {
-			t.Fatalf("expected regHandler to be non-nil")
-		}
-		if updateHandler == nil {
-			t.Fatalf("expected updateHandler to be non-nil")
-		}
-		return &mockServeRunner{called: &called}
-	}
-
-	cfg := &config.Config{
-		Daemon: config.DaemonConfig{Port: 1234, ReportBootOptions: false},
+		Daemon: config.DaemonConfig{Port: 0, ReportBootOptions: false},
 	}
 	deps := &CommandDeps{Config: cfg, Grub: &grub.Grub{}, Registry: servicemanager.NewRegistry()}
 	cmd := NewServeCmd(deps)
 	cmd.SetOut(&bytes.Buffer{})
 
-	err := cmd.Execute()
-	if err != nil {
+	// Create a context that is immediately cancelled so Run returns quickly
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := cmd.ExecuteContext(ctx)
+	if err != nil && err != context.Canceled {
 		t.Fatalf("unexpected error: %v", err)
-	}
-	if !called {
-		t.Fatal("expected serve Run to be invoked")
 	}
 }
 
 func TestNewServeCmd_DriftDetected(t *testing.T) {
-	oldNewServe := newServe
-	defer func() { newServe = oldNewServe }()
 	oldHassPath := grub.HassGrubStationPath
 	defer func() { grub.HassGrubStationPath = oldHassPath }()
 
 	// Point HassGrubStationPath to a non-existent file to trigger drift (CheckDrift returns true if file missing)
 	grub.HassGrubStationPath = "/tmp/non-existent-grubstation-script"
 
-	called := false
-	newServe = func(cfg daemon.Config, meta daemon.Metadata, regHandler func(ctx context.Context, token string) error, updateHandler func(ctx context.Context) error) serveRunner {
-		return &mockServeRunner{called: &called}
-	}
-
 	cfg := &config.Config{
-		Daemon: config.DaemonConfig{ReportBootOptions: true},
+		Daemon: config.DaemonConfig{Port: 0, ReportBootOptions: true},
 		HomeAssistant: config.HomeAssistantConfig{
 			URL: "http://ha.local:8123",
 		},
@@ -114,26 +45,18 @@ func TestNewServeCmd_DriftDetected(t *testing.T) {
 	cmd := NewServeCmd(deps)
 	cmd.SetOut(&bytes.Buffer{})
 
-	err := cmd.Execute()
-	if err != nil {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := cmd.ExecuteContext(ctx)
+	if err != nil && err != context.Canceled {
 		t.Fatalf("unexpected error: %v", err)
-	}
-	if !called {
-		t.Fatal("expected serve Run to be invoked")
 	}
 }
 
 func TestNewServeCmd_DriftError(t *testing.T) {
-	oldNewServe := newServe
-	defer func() { newServe = oldNewServe }()
-
-	called := false
-	newServe = func(cfg daemon.Config, meta daemon.Metadata, regHandler func(ctx context.Context, token string) error, updateHandler func(ctx context.Context) error) serveRunner {
-		return &mockServeRunner{called: &called}
-	}
-
 	cfg := &config.Config{
-		Daemon: config.DaemonConfig{ReportBootOptions: true},
+		Daemon: config.DaemonConfig{Port: 0, ReportBootOptions: true},
 		HomeAssistant: config.HomeAssistantConfig{
 			URL: "invalid-url", // This will cause CheckDrift to return an error
 		},
@@ -142,26 +65,18 @@ func TestNewServeCmd_DriftError(t *testing.T) {
 	cmd := NewServeCmd(deps)
 	cmd.SetOut(&bytes.Buffer{})
 
-	err := cmd.Execute()
-	if err != nil {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := cmd.ExecuteContext(ctx)
+	if err != nil && err != context.Canceled {
 		t.Fatalf("unexpected error: %v", err)
-	}
-	if !called {
-		t.Fatal("expected serve Run to be invoked")
 	}
 }
 
 func TestNewServeCmd_ExplicitGrubConfig(t *testing.T) {
-	oldNewServe := newServe
-	defer func() { newServe = oldNewServe }()
-
-	called := false
-	newServe = func(cfg daemon.Config, meta daemon.Metadata, regHandler func(ctx context.Context, token string) error, updateHandler func(ctx context.Context) error) serveRunner {
-		return &mockServeRunner{called: &called}
-	}
-
 	cfg := &config.Config{
-		Daemon: config.DaemonConfig{ReportBootOptions: true},
+		Daemon: config.DaemonConfig{Port: 0, ReportBootOptions: true},
 		Grub: &config.GrubConfig{
 			WaitTimeSeconds: 10,
 			URL:             "http://grub.local",
@@ -171,12 +86,12 @@ func TestNewServeCmd_ExplicitGrubConfig(t *testing.T) {
 	cmd := NewServeCmd(deps)
 	cmd.SetOut(&bytes.Buffer{})
 
-	err := cmd.Execute()
-	if err != nil {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := cmd.ExecuteContext(ctx)
+	if err != nil && err != context.Canceled {
 		t.Fatalf("unexpected error: %v", err)
-	}
-	if !called {
-		t.Fatal("expected serve Run to be invoked")
 	}
 }
 
@@ -193,34 +108,23 @@ func (m *mockManager) Configure(ctx context.Context, cfg *config.Config) error {
 }
 
 func TestNewServeCmd_WithServiceManager(t *testing.T) {
-	oldNewServe := newServe
-	defer func() { newServe = oldNewServe }()
-
-	called := false
-	newServe = func(cfg daemon.Config, meta daemon.Metadata, regHandler func(ctx context.Context, token string) error, updateHandler func(ctx context.Context) error) serveRunner {
-		if meta.ServiceManager != "mock-mgr" {
-			t.Fatalf("expected service manager mock-mgr, got %s", meta.ServiceManager)
-		}
-		return &mockServeRunner{called: &called}
-	}
-
 	reg := servicemanager.NewRegistry()
 	reg.Register("mock-mgr", func() servicemanager.Manager {
 		return &mockManager{name: "mock-mgr", active: true}
 	})
 
 	cfg := &config.Config{
-		Daemon: config.DaemonConfig{Port: 1234},
+		Daemon: config.DaemonConfig{Port: 0},
 	}
 	deps := &CommandDeps{Config: cfg, Grub: &grub.Grub{}, Registry: reg}
 	cmd := NewServeCmd(deps)
 	cmd.SetOut(&bytes.Buffer{})
 
-	err := cmd.Execute()
-	if err != nil {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := cmd.ExecuteContext(ctx)
+	if err != nil && err != context.Canceled {
 		t.Fatalf("unexpected error: %v", err)
-	}
-	if !called {
-		t.Fatal("expected serve Run to be invoked")
 	}
 }

@@ -13,14 +13,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type serveRunner interface {
-	Run(ctx context.Context) error
-}
-
-var newServe = func(cfg daemon.Config, meta daemon.Metadata, regHandler func(ctx context.Context, token string) error, updateHandler func(ctx context.Context) error) serveRunner {
-	return daemon.New(cfg, meta, regHandler, updateHandler)
-}
-
 func NewServeCmd(deps *CommandDeps) *cobra.Command {
 	return &cobra.Command{
 		Use:   "serve",
@@ -64,7 +56,7 @@ func NewServeCmd(deps *CommandDeps) *cobra.Command {
 					slog.Debug("Failed to check for GRUB drift", "error", err)
 				}
 			}
-			d := newServe(daemon.Config{
+			d := daemon.New(daemon.Config{
 				Port:              deps.Config.Daemon.Port,
 				ReportBootOptions: deps.Config.Daemon.ReportBootOptions,
 				APIKey:            deps.Config.Daemon.APIKey,
