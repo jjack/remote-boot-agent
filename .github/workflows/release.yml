@@ -36,7 +36,7 @@ jobs:
         run: |
           dotnet tool install --global wix
           wix eula accept wix7
-          wix extension add WixToolset.UI.wixext -g
+          wix extension add WixToolset.Firewall.wixext WixToolset.UI.wixext WixToolset.Util.wixext -g
 
       - uses: goreleaser/goreleaser-action@v7
         with:
