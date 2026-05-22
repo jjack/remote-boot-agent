@@ -29,4 +29,4 @@ comment:
 
 ignore:
   - "**/*_test.go"
-  - "internal/cli/wizard.go" # testing this requires some brittle, sort of un-maintainable code
+  - "internal/cli/wizard/wizard.go" # testing this requires some brittle, sort of un-maintainable code
