@@ -29,7 +29,7 @@ func Platform() string {
 }
 
 // GetFQDN attempts to resolve the Fully Qualified Domain Name for a given hostname.
-func GetFQDN(hostname string, _ *net.Interface) string {
+var GetFQDN = func(hostname string, _ *net.Interface) string {
 	if cname, err := NetLookupCNAME(hostname); err == nil && cname != "" {
 		return strings.TrimSuffix(cname, ".")
 	}

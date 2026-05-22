@@ -14,7 +14,6 @@ import (
 	"github.com/jjack/grubstation/internal/cli/wizard"
 	"github.com/jjack/grubstation/internal/config"
 	"github.com/jjack/grubstation/internal/grub"
-	"github.com/jjack/grubstation/internal/homeassistant"
 	"github.com/jjack/grubstation/internal/host"
 	"github.com/jjack/grubstation/internal/reporter"
 	"github.com/jjack/grubstation/internal/servicemanager"
@@ -139,20 +138,6 @@ func ensureSupport(ctx context.Context, deps *CommandDeps) (servicemanager.Manag
 	return mgr, nil
 }
 
-func (deps *CommandDeps) SurveyDeps() wizard.SurveyDeps {
-	return wizard.SurveyDeps{
-		DiscoverHomeAssistant: homeassistant.Discover,
-		DetectSystemHostname:  host.DetectHostname,
-		GetWOLInterfaces:      host.GetWOLInterfaces,
-		GetIPInfo:             host.GetIPInfo,
-		GetFQDN:               host.GetFQDN,
-		DiscoverGrubConfig:    deps.Grub.DiscoverConfigPath,
-		IsInstalled: func(ctx context.Context) (bool, error) {
-			return IsInstalled(ctx, deps)
-		},
-	}
-}
-
 func IsInstalled(ctx context.Context, deps *CommandDeps) (bool, error) {
 	mgr, err := ensureSupport(ctx, deps)
 	if err != nil {
@@ -242,7 +227,21 @@ func NewSetupCmd(deps *CommandDeps) *cobra.Command {
 			if _, err := os.Stat(cfgPath); err == nil {
 				isConfigured = true
 			}
-			cfg, err := wizard.RunGenerateSurvey(cmd.Context(), deps.SurveyDeps(), isConfigured, currentPort, dryRun)
+
+			// Perform initial discovery
+			hostname, _ := host.DetectHostname()
+			interfaces, _ := host.GetWOLInterfaces()
+			grubConfigPath, _ := deps.Grub.DiscoverConfigPath(cmd.Context())
+
+			state := wizard.SystemState{
+				Hostname:       hostname,
+				Interfaces:     interfaces,
+				GrubConfigPath: grubConfigPath,
+				IsReinstall:    isConfigured,
+				CurrentPort:    currentPort,
+			}
+
+			cfg, err := wizard.RunGenerateSurvey(cmd.Context(), state, dryRun)
 			if err != nil {
 				if errors.Is(err, wizard.ErrAborted) {
 					tap.Message("Setup aborted.")

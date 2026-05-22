@@ -12,29 +12,28 @@ import (
 
 	"github.com/jjack/grubstation/internal/config"
 	"github.com/jjack/grubstation/internal/homeassistant"
+	"github.com/jjack/grubstation/internal/host"
 	"github.com/spf13/cobra"
 	"github.com/yarlson/tap"
 )
 
-type SurveyDeps struct {
-	DiscoverHomeAssistant func(ctx context.Context) ([]homeassistant.ServiceInstance, error)
-	DetectSystemHostname  func() (string, error)
-	GetWOLInterfaces      func() ([]net.Interface, error)
-	GetIPInfo             func(inf net.Interface) ([]string, map[string]string)
-	GetFQDN               func(hostname string, inf *net.Interface) string
-	DiscoverGrubConfig    func(ctx context.Context) (string, error)
-	IsInstalled           func(ctx context.Context) (bool, error)
+type SystemState struct {
+	Hostname       string
+	Interfaces     []net.Interface
+	GrubConfigPath string
+	IsReinstall    bool
+	CurrentPort    int
 }
 
 var (
-	RunGenerateSurvey func(context.Context, SurveyDeps, bool, int, bool) (*config.Config, error) = generateConfigInteractive
+	RunGenerateSurvey func(context.Context, SystemState, bool) (*config.Config, error) = generateConfigInteractive
 
 	ErrAborted = errors.New("setup aborted")
 )
 
-func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall bool, currentPort int, isDryRun bool) (*config.Config, error) {
+func generateConfigInteractive(ctx context.Context, state SystemState, isDryRun bool) (*config.Config, error) {
 	// 0. Overwrite Confirmation
-	if isReinstall && !isDryRun {
+	if state.IsReinstall && !isDryRun {
 		overwrite := tap.Confirm(ctx, tap.ConfirmOptions{
 			Message:      "GrubStation is already configured. Do you want to re-run setup and overwrite the existing configuration?",
 			InitialValue: false,
@@ -47,23 +46,10 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 		}
 	}
 
-	// 1. Initial Discovery
-	hostname, err := deps.DetectSystemHostname()
-	if err != nil {
-		slog.Debug("Failed to detect system hostname", "error", err)
-		return nil, err
-	}
-	slog.Debug("Detected system hostname", "hostname", hostname)
-
-	interfaces, err := deps.GetWOLInterfaces()
-	if err != nil {
-		slog.Debug("Failed to get WOL interfaces", "error", err)
-		return nil, err
-	}
-	slog.Debug("Detected WOL interfaces", "count", len(interfaces))
-
-	grubConfigPath, _ := deps.DiscoverGrubConfig(ctx)
-	slog.Debug("Discovered GRUB config path", "path", grubConfigPath)
+	// Initial Discovery (hostname and interfaces are already passed in state)
+	hostname := state.Hostname
+	interfaces := state.Interfaces
+	grubConfigPath := state.GrubConfigPath
 
 	// Background HA Discovery
 	type haResult struct {
@@ -73,7 +59,7 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 	haChan := make(chan haResult, 1)
 	go func() {
 		slog.Debug("Starting background Home Assistant discovery")
-		instances, err := deps.DiscoverHomeAssistant(ctx)
+		instances, err := homeassistant.DiscoverFunc(ctx)
 		if err != nil {
 			slog.Debug("Background HA discovery failed", "error", err)
 		} else {
@@ -101,7 +87,7 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 	globalInfoChan := make(chan globalInfo, 1)
 	go func() {
 		slog.Debug("Starting background global FQDN resolution", "hostname", hostname)
-		fqdn := deps.GetFQDN(hostname, nil)
+		fqdn := host.GetFQDN(hostname, nil)
 		slog.Debug("Background global FQDN resolution complete", "fqdn", fqdn)
 		globalInfoChan <- globalInfo{fqdn}
 	}()
@@ -109,7 +95,7 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 	// 3. Network Interface
 	ifaceIdx := tap.Select(ctx, tap.SelectOptions[int]{
 		Message: "Available Network Interface",
-		Options: BuildIfaceOptions(interfaces, deps.GetIPInfo),
+		Options: BuildIfaceOptions(interfaces, host.GetIPInfo),
 	})
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
@@ -118,11 +104,11 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 	slog.Debug("Selected network interface", "interface", selectedIface.Name, "mac", selectedIface.HardwareAddr.String())
 
 	// 4. Host Address
-	ips, broadcasts := deps.GetIPInfo(selectedIface)
+	ips, broadcasts := host.GetIPInfo(selectedIface)
 	slog.Debug("Interface IP info", "ips", ips, "broadcasts", broadcasts)
 
 	// Local FQDN resolution (fast on Windows, just a local check)
-	localFQDN := deps.GetFQDN(hostname, &selectedIface)
+	localFQDN := host.GetFQDN(hostname, &selectedIface)
 	slog.Debug("Local FQDN resolution result", "fqdn", localFQDN)
 
 	var globalFQDN string
@@ -151,8 +137,8 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 	var AgentPort int
 	if runsDaemon {
 		defaultValue := strconv.Itoa(config.DefaultAgentPort)
-		if currentPort > 0 {
-			defaultValue = strconv.Itoa(currentPort)
+		if state.CurrentPort > 0 {
+			defaultValue = strconv.Itoa(state.CurrentPort)
 		}
 		portStr := tap.Text(ctx, tap.TextOptions{
 			Message:      fmt.Sprintf("Daemon Port (default: %d)", config.DefaultAgentPort),
@@ -163,7 +149,7 @@ func generateConfigInteractive(ctx context.Context, deps SurveyDeps, isReinstall
 				if os.Getenv("GRUBSTATION_SKIP_PORT_CHECK") == "true" {
 					portChecker = func(int) error { return nil }
 				}
-				return ValidatePort(s, isReinstall, currentPort, portChecker)
+				return ValidatePort(s, state.IsReinstall, state.CurrentPort, portChecker)
 			},
 		})
 		if ctx.Err() != nil {

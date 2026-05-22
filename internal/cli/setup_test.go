@@ -83,7 +83,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 				tempGrub := t.TempDir() + "/grub.cfg"
 				_ = os.WriteFile(tempGrub, []byte(""), 0o644)
 				deps.Grub = func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = tempGrub; return g }()
-				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int, isDryRun bool) (*config.Config, error) {
+				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool) (*config.Config, error) {
 					return &config.Config{
 						HomeAssistant: config.HomeAssistantConfig{URL: ts.URL, WebhookID: "fake"},
 					}, nil
@@ -101,7 +101,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 				tempGrub := t.TempDir() + "/grub.cfg"
 				_ = os.WriteFile(tempGrub, []byte(""), 0o644)
 				deps.Grub = func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = tempGrub; return g }()
-				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int, isDryRun bool) (*config.Config, error) {
+				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool) (*config.Config, error) {
 					return &config.Config{}, nil
 				}
 			},
@@ -128,7 +128,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 				tempGrub := t.TempDir() + "/grub.cfg"
 				_ = os.WriteFile(tempGrub, []byte(""), 0o644)
 				deps.Grub = func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = tempGrub; return g }()
-				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int, isDryRun bool) (*config.Config, error) {
+				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool) (*config.Config, error) {
 					return nil, errors.New("survey failed")
 				}
 			},
@@ -149,7 +149,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 				tempGrub := t.TempDir() + "/grub.cfg"
 				_ = os.WriteFile(tempGrub, []byte(""), 0o644)
 				deps.Grub = func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = tempGrub; return g }()
-				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int, isDryRun bool) (*config.Config, error) {
+				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool) (*config.Config, error) {
 					return &config.Config{}, nil
 				}
 				osMkdirAll = func(path string, perm os.FileMode) error { return errors.New("mkdirall failed") }
@@ -164,7 +164,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 				tempGrub := t.TempDir() + "/grub.cfg"
 				_ = os.WriteFile(tempGrub, []byte(""), 0o644)
 				deps.Grub = func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = tempGrub; return g }()
-				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int, isDryRun bool) (*config.Config, error) {
+				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool) (*config.Config, error) {
 					return &config.Config{}, nil
 				}
 				oldSave := config.Save
@@ -182,7 +182,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 				tempGrub := t.TempDir() + "/grub.cfg"
 				_ = os.WriteFile(tempGrub, []byte(""), 0o644)
 				deps.Grub = func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = tempGrub; return g }() // will fail since not mocked correctly
-				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int, isDryRun bool) (*config.Config, error) {
+				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool) (*config.Config, error) {
 					return &config.Config{
 						Daemon: config.DaemonConfig{ReportBootOptions: true},
 					}, nil
@@ -212,7 +212,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 				_ = os.WriteFile(tempGrub, []byte("menuentry 'OS' {}"), 0o644)
 				deps.Grub = func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = tempGrub; return g }()
 
-				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int, isDryRun bool) (*config.Config, error) {
+				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool) (*config.Config, error) {
 					return &config.Config{
 						HomeAssistant: config.HomeAssistantConfig{URL: ts.URL, WebhookID: "fake"},
 					}, nil
@@ -238,7 +238,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 				// Make GetBootOptions fail to trigger error in PushBootOptions
 				deps.Grub = func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = "/non/existent/path"; return g }()
 
-				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int, isDryRun bool) (*config.Config, error) {
+				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool) (*config.Config, error) {
 					return &config.Config{
 						HomeAssistant: config.HomeAssistantConfig{URL: "http://fake", WebhookID: "fake"},
 					}, nil
@@ -254,7 +254,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 		{
 			name: "Setup Aborted on Overwrite No",
 			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) {
-				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int, isDryRun bool) (*config.Config, error) {
+				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool) (*config.Config, error) {
 					return nil, wizard.ErrAborted
 				}
 			},
@@ -397,19 +397,6 @@ func TestEnsureSupport_GenericErrors(t *testing.T) {
 			t.Errorf("expected context.Canceled, got %v", err)
 		}
 	})
-}
-
-func TestCommandDeps_SurveyDeps(t *testing.T) {
-	initReg := servicemanager.NewRegistry()
-	initReg.Register("systemd", func() servicemanager.Manager { return &mockInstallInitSystem{} })
-	deps := &CommandDeps{
-		Registry: initReg,
-	}
-
-	sd := deps.SurveyDeps()
-	if sd.DiscoverHomeAssistant == nil {
-		t.Fatal("expected DiscoverHomeAssistant to be set")
-	}
 }
 
 type mockSurveyService struct{}

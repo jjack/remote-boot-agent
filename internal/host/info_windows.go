@@ -61,7 +61,7 @@ var getAdapterDNSSuffix = func(ifIndex uint32) string {
 
 // GetFQDN attempts to resolve the Fully Qualified Domain Name for a given hostname.
 // On Windows, it tries to append the Connection-specific DNS Suffix of the provided interface.
-func GetFQDN(hostname string, inf *net.Interface) string {
+var GetFQDN = func(hostname string, inf *net.Interface) string {
 	if inf != nil {
 		if suffix := getAdapterDNSSuffix(uint32(inf.Index)); suffix != "" {
 			return fmt.Sprintf("%s.%s", hostname, suffix)

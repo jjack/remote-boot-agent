@@ -45,7 +45,7 @@ func isWOLCapableInterface(inf net.Interface) bool {
 }
 
 // GetWOLInterfaces returns a slice of net.Interface that are capable of Wake-on-LAN.
-func GetWOLInterfaces() ([]net.Interface, error) {
+var GetWOLInterfaces = func() ([]net.Interface, error) {
 	interfaces, err := NetInterfaces()
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrListInterfaces, err)
@@ -92,7 +92,7 @@ func getLastIP(ipnet *net.IPNet) net.IP {
 }
 
 // GetIPInfo returns a list of IPv4 addresses and a map of those addresses to their computed broadcast address.
-func GetIPInfo(inf net.Interface) ([]string, map[string]string) {
+var GetIPInfo = func(inf net.Interface) ([]string, map[string]string) {
 	var ips []string
 	broadcasts := make(map[string]string)
 
@@ -118,7 +118,7 @@ func GetIPInfo(inf net.Interface) ([]string, map[string]string) {
 	return ips, broadcasts
 }
 
-func DetectHostname() (string, error) {
+var DetectHostname = func() (string, error) {
 	hostname, err := OsHostname()
 	if err != nil {
 		return "", fmt.Errorf("%w: %w", ErrDetectHostname, err)
