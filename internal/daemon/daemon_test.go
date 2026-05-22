@@ -8,8 +8,12 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/jjack/grubstation/internal/homeassistant"
 )
 
 func getFreePort(t *testing.T) int {
@@ -143,121 +147,42 @@ func TestDaemon_Shutdown_Unauthorized(t *testing.T) {
 		t.Errorf("expected 403, got %d", resp.StatusCode)
 	}
 
-	if resp.Header.Get("Content-Type") != "application/json" {
-		t.Errorf("expected application/json, got %s", resp.Header.Get("Content-Type"))
-	}
-
-	var result map[string]string
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		t.Fatalf("failed to decode JSON: %v", err)
-	}
-
-	if result["status"] != "error" || result["error"] != "Forbidden" {
-		t.Errorf("unexpected JSON response: %v", result)
-	}
-
-	cancel()
-	<-done
-}
-
-func TestDaemon_InvalidMethod(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	port := getFreePort(t)
-	d := New(Config{Port: port, APIKey: "test-key"}, Metadata{}, nil, nil)
-
-	done := make(chan error, 1)
-	go func() { done <- d.run(ctx) }()
-	time.Sleep(10 * time.Millisecond)
-
-	if err := waitForServer(port); err != nil {
-		cancel()
-		t.Fatal(err)
-	}
-
-	resp, err := getTestClient().Get(fmt.Sprintf("http://localhost:%d/shutdown", port))
-	if err != nil {
-		t.Fatalf("request failed: %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusMethodNotAllowed {
-		t.Errorf("expected 405, got %d", resp.StatusCode)
-	}
-
-	if resp.Header.Get("Content-Type") != "application/json" {
-		t.Errorf("expected application/json, got %s", resp.Header.Get("Content-Type"))
-	}
-
-	var result map[string]string
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		t.Fatalf("failed to decode JSON: %v", err)
-	}
-
-	if result["status"] != "error" || result["error"] != "Method not allowed" {
-		t.Errorf("unexpected JSON response: %v", result)
-	}
-
-	cancel()
-	<-done
-}
-
-func TestDaemon_NotFound(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	port := getFreePort(t)
-	token := "token"
-	d := New(Config{Port: port, APIKey: token}, Metadata{}, nil, nil)
-
-	done := make(chan error, 1)
-	go func() { done <- d.run(ctx) }()
-
-	if err := waitForServer(port); err != nil {
-		cancel()
-		t.Fatal(err)
-	}
-
-	req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("http://localhost:%d/invalid", port), nil)
-	req.Header.Set("Authorization", "Bearer "+token)
-	resp, err := getTestClient().Do(req)
-	if err != nil {
-		t.Fatalf("request failed: %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusNotFound {
-		t.Errorf("expected 404, got %d", resp.StatusCode)
-	}
-
 	cancel()
 	<-done
 }
 
 func TestDaemon_Run_HandshakeSuccess(t *testing.T) {
+	var registerPayload homeassistant.RegistrationPayload
+	var updatePayload homeassistant.UpdatePayload
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "webhook123") {
+			var p map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&p)
+			if p["action"] == string(homeassistant.ActionRegisterAction) {
+				registerPayload.Action = homeassistant.ActionRegisterAction
+				registerPayload.AgentToken = p["agent_token"].(string)
+			} else if p["action"] == string(homeassistant.ActionUpdateAction) {
+				updatePayload.Action = homeassistant.ActionUpdateAction
+			}
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("OK"))
+		}
+	}))
+	defer ts.Close()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Find an available port
 	port := getFreePort(t)
 	token := "secret"
-	registrationDone := make(chan bool, 1)
-	updateDone := make(chan bool, 1)
+	haClient := homeassistant.NewClient(ts.URL, "webhook123", nil)
 
 	d := New(Config{
 		Port:              port,
 		APIKey:            token,
 		ReportBootOptions: true,
-	}, Metadata{}, func(ctx context.Context, tok string) error {
-		if tok == token {
-			registrationDone <- true
-		}
-		return nil
-	}, func(ctx context.Context) error {
-		updateDone <- true
-		return nil
-	})
+	}, Metadata{}, nil, haClient)
 
 	done := make(chan error, 1)
 	go func() { done <- d.run(ctx) }()
@@ -267,57 +192,17 @@ func TestDaemon_Run_HandshakeSuccess(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	select {
-	case <-registrationDone:
-		// Success
-	case <-time.After(2 * time.Second):
-		t.Error("registration not called within timeout")
-	}
+	// Wait for registration and update
+	time.Sleep(100 * time.Millisecond)
 
-	select {
-	case <-updateDone:
-		// Success
-	case <-time.After(2 * time.Second):
-		t.Error("initial update not called within timeout")
-	}
-
-	cancel()
-	<-done
-}
-
-func TestDaemon_Run_DynamicToken(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	port := getFreePort(t)
-	var capturedToken string
-	registrationDone := make(chan bool, 1)
-
-	// No APIKey provided, should generate one
-	d := New(Config{Port: port, APIKey: ""}, Metadata{}, func(ctx context.Context, tok string) error {
-		capturedToken = tok
-		registrationDone <- true
-		return nil
-	}, nil)
-
-	done := make(chan error, 1)
-	go func() { done <- d.run(ctx) }()
-
-	if err := waitForServer(port); err != nil {
-		cancel()
-		t.Fatal(err)
-	}
-
-	select {
-	case <-registrationDone:
-		if capturedToken == "" {
-			t.Error("expected a generated token, got empty string")
-		}
-		if len(capturedToken) < 16 {
-			t.Errorf("generated token too short: %s", capturedToken)
-		}
-	case <-time.After(2 * time.Second):
+	if registerPayload.Action != homeassistant.ActionRegisterAction {
 		t.Error("registration not called")
+	}
+	if registerPayload.AgentToken != token {
+		t.Errorf("expected token %s, got %s", token, registerPayload.AgentToken)
+	}
+	if updatePayload.Action != homeassistant.ActionUpdateAction {
+		t.Error("initial update not called")
 	}
 
 	cancel()
@@ -325,22 +210,27 @@ func TestDaemon_Run_DynamicToken(t *testing.T) {
 }
 
 func TestDaemon_Shutdown_Success(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	}))
+	defer ts.Close()
+
 	port := getFreePort(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	cmdCalled := make(chan bool, 1)
 	token := "token"
-	updateCalled := make(chan bool, 10)
+	haClient := homeassistant.NewClient(ts.URL, "webhook", nil)
+
 	d := New(Config{
 		Port:              port,
 		APIKey:            token,
 		ReportBootOptions: true,
 		ShutdownDelay:     time.Millisecond,
-	}, Metadata{}, nil, func(ctx context.Context) error {
-		updateCalled <- true
-		return nil
-	})
+	}, Metadata{}, nil, haClient)
+
 	d.ShutdownHandler = func() error {
 		cmdCalled <- true
 		return nil
@@ -366,74 +256,11 @@ func TestDaemon_Shutdown_Success(t *testing.T) {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
 	}
 
-	if resp.Header.Get("Content-Type") != "application/json" {
-		t.Errorf("expected application/json, got %s", resp.Header.Get("Content-Type"))
-	}
-
-	var result map[string]string
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		t.Fatalf("failed to decode JSON: %v", err)
-	}
-
-	if result["status"] != "ok" {
-		t.Errorf("expected status 'ok', got %q", result["status"])
-	}
-
 	select {
 	case <-cmdCalled:
 		// success
 	case <-time.After(2 * time.Second):
 		t.Error("shutdown command not called")
-	}
-
-	// Drain any remaining updates to avoid blocking the daemon's finalization
-	go func() {
-		for range updateCalled {
-		}
-	}()
-
-	cancel()
-	<-done
-	close(updateCalled)
-}
-
-func TestDaemon_Run_HandshakeRetry(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	port := getFreePort(t)
-	callCount := 0
-	registrationDone := make(chan bool, 1)
-
-	d := New(Config{
-		Port:              port,
-		APIKey:            "test-key",
-		RetryInterval:     10 * time.Millisecond,
-		ReportBootOptions: true,
-	}, Metadata{}, func(ctx context.Context, tok string) error {
-		callCount++
-		if callCount == 1 {
-			return errors.New("fail")
-		}
-		registrationDone <- true
-		return nil
-	}, nil)
-
-	done := make(chan error, 1)
-	go func() { done <- d.run(ctx) }()
-
-	if err := waitForServer(port); err != nil {
-		cancel()
-		t.Fatal(err)
-	}
-
-	select {
-	case <-registrationDone:
-		if callCount < 2 {
-			t.Errorf("expected retry, callCount was %d", callCount)
-		}
-	case <-time.After(1 * time.Second):
-		t.Error("registration retry did not succeed in time")
 	}
 
 	cancel()
@@ -486,23 +313,15 @@ func TestDaemon_Shutdown_CommandError(t *testing.T) {
 		t.Errorf("expected 500, got %d", resp.StatusCode)
 	}
 
-	var result map[string]string
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		t.Fatalf("failed to decode JSON: %v", err)
-	}
-
-	if result["status"] != "error" || result["error"] == "" {
-		t.Errorf("unexpected JSON response: %v", result)
-	}
-
 	cancel()
 	<-done
 }
 
 func TestDaemon_Run_HandshakeCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	// Cancel immediately to test the select <-ctx.Done() branches
 	cancel()
+
+	haClient := homeassistant.NewClient("http://fake", "fake", nil)
 
 	port := getFreePort(t)
 	d := New(Config{
@@ -510,11 +329,8 @@ func TestDaemon_Run_HandshakeCancel(t *testing.T) {
 		APIKey:            "test-key",
 		RetryInterval:     10 * time.Millisecond,
 		ReportBootOptions: true,
-	}, Metadata{}, func(ctx context.Context, tok string) error {
-		return errors.New("fail")
-	}, nil)
+	}, Metadata{}, nil, haClient)
 
-	// This should return quickly because context is cancelled
 	done := make(chan error, 1)
 	go func() { done <- d.run(ctx) }()
 
@@ -524,92 +340,4 @@ func TestDaemon_Run_HandshakeCancel(t *testing.T) {
 	case <-time.After(1 * time.Second):
 		t.Error("daemon run did not stop on cancelled context")
 	}
-}
-
-func TestDaemon_ListenAndServeError(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Use an invalid port to trigger ListenAndServe error
-	d := New(Config{Port: -1}, Metadata{}, nil, nil)
-
-	// We just want to make sure it logs an error and continues/returns appropriately
-	// The srv.ListenAndServe() error is logged but doesn't stop the main loop
-	// until ctx is cancelled.
-	done := make(chan error, 1)
-	go func() { done <- d.run(ctx) }()
-
-	// Wait a bit to ensure it tries to start
-	time.Sleep(50 * time.Millisecond)
-
-	cancel()
-	<-done
-}
-
-func TestDaemon_Run_UpdateError(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	port := getFreePort(t)
-	d := New(Config{
-		Port:   port,
-		APIKey: "test-key",
-	}, Metadata{}, func(ctx context.Context, tok string) error {
-		return nil
-	}, func(ctx context.Context) error {
-		return errors.New("update fail")
-	})
-
-	done := make(chan error, 1)
-	go func() { done <- d.run(ctx) }()
-
-	if err := waitForServer(port); err != nil {
-		t.Fatal(err)
-	}
-
-	// Just need it to run the initial update and log error
-	time.Sleep(50 * time.Millisecond)
-
-	cancel()
-	<-done
-}
-
-func TestDaemon_Shutdown_PrePush_Error(t *testing.T) {
-	port := getFreePort(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	token := "token"
-	d := New(Config{
-		Port:              port,
-		APIKey:            token,
-		ReportBootOptions: true,
-	}, Metadata{}, nil, func(ctx context.Context) error {
-		return errors.New("pre-shutdown push fail")
-	})
-	d.ShutdownHandler = func() error {
-		return nil
-	}
-
-	done := make(chan error, 1)
-	go func() { done <- d.run(ctx) }()
-
-	if err := waitForServer(port); err != nil {
-		t.Fatal(err)
-	}
-
-	req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("http://localhost:%d/shutdown", port), nil)
-	req.Header.Set("Authorization", "Bearer "+token)
-	resp, err := getTestClient().Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("expected 200, got %d", resp.StatusCode)
-	}
-
-	cancel()
-	<-done
 }

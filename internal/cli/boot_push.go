@@ -3,10 +3,11 @@
 package cli
 
 import (
+	"fmt"
 	"log/slog"
 
 	"github.com/jjack/grubstation/internal/daemon"
-	"github.com/jjack/grubstation/internal/reporter"
+	"github.com/jjack/grubstation/internal/homeassistant"
 	"github.com/spf13/cobra"
 )
 
@@ -22,15 +23,27 @@ func NewBootPushCmd(deps *CommandDeps) *cobra.Command {
 				slog.Debug("Could not push via daemon socket, falling back to direct push", "error", err)
 			}
 
-			mgr, _ := deps.Manager(cmd.Context())
-			mgrName := ""
-			if mgr != nil {
-				mgrName = mgr.Name()
+			if deps.Config.HomeAssistant.URL == "" || deps.Config.HomeAssistant.WebhookID == "" {
+				return fmt.Errorf("homeassistant url and webhook_id must be configured")
 			}
-			rep := reporter.New(deps.Config, deps.Grub, mgrName)
-			if err := rep.PushBootOptions(cmd.Context()); err != nil {
+
+			options, err := deps.Grub.GetBootOptions(cmd.Context())
+			if err != nil {
 				return err
 			}
+
+			var wolAddr string
+			var wolPort int
+			if deps.Config.WakeOnLan != nil {
+				wolAddr = deps.Config.WakeOnLan.Address
+				wolPort = deps.Config.WakeOnLan.Port
+			}
+
+			client := homeassistant.NewClient(deps.Config.HomeAssistant.URL, deps.Config.HomeAssistant.WebhookID, nil)
+			if err := client.UpdateBootOptions(cmd.Context(), deps.Config.Host.MACAddress, deps.Config.Host.Address, options, wolAddr, wolPort); err != nil {
+				return err
+			}
+
 			cmd.Println("Successfully pushed boot options to Home Assistant")
 			return nil
 		},

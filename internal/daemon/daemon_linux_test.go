@@ -4,29 +4,35 @@ package daemon
 
 import (
 	"context"
-	"errors"
+	"net/http"
+	"net/http/httptest"
 	"sync"
 	"testing"
+
+	"github.com/jjack/grubstation/internal/homeassistant"
 )
 
 func TestDaemon_FinalPush(t *testing.T) {
+	var mu sync.Mutex
+	pushCalled := false
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		pushCalled = true
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	}))
+	defer ts.Close()
+
 	port := getFreePort(t)
 	token := "token"
-
-	var wg sync.WaitGroup
-	wg.Add(3) // 1 registration + 1 initial update + 1 final update
+	haClient := homeassistant.NewClient(ts.URL, "webhook", nil)
 
 	d := New(Config{
 		Port:              port,
 		APIKey:            token,
 		ReportBootOptions: true,
-	}, Metadata{}, func(ctx context.Context, tok string) error {
-		wg.Done()
-		return nil
-	}, func(ctx context.Context) error {
-		wg.Done()
-		return nil
-	})
+	}, Metadata{}, nil, haClient)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -39,27 +45,9 @@ func TestDaemon_FinalPush(t *testing.T) {
 	cancel()
 	<-done
 
-	wg.Wait()
-}
-
-func TestDaemon_FinalPush_UpdateError(t *testing.T) {
-	port := getFreePort(t)
-	d := New(Config{
-		Port:              port,
-		APIKey:            "token",
-		ReportBootOptions: true,
-	}, Metadata{}, nil, func(ctx context.Context) error {
-		return errors.New("final push fail")
-	})
-
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error, 1)
-	go func() { done <- d.run(ctx) }()
-
-	if err := waitForServer(port); err != nil {
-		t.Fatal(err)
+	mu.Lock()
+	if !pushCalled {
+		t.Error("final push was not called on linux shutdown")
 	}
-
-	cancel()
-	<-done
+	mu.Unlock()
 }

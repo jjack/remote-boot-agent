@@ -14,8 +14,8 @@ import (
 	"github.com/jjack/grubstation/internal/cli/wizard"
 	"github.com/jjack/grubstation/internal/config"
 	"github.com/jjack/grubstation/internal/grub"
+	"github.com/jjack/grubstation/internal/homeassistant"
 	"github.com/jjack/grubstation/internal/host"
-	"github.com/jjack/grubstation/internal/reporter"
 	"github.com/jjack/grubstation/internal/servicemanager"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -256,24 +256,33 @@ func performInstall(cmd *cobra.Command, deps *CommandDeps, cfgFile string, token
 			return fmt.Errorf("failed to install grub: %w", err)
 		}
 
-		tap.Message("Pushing initial boot options to Home Assistant...")
-		activeMgr, _ := deps.Manager(cmd.Context())
-		mgrName := ""
-		if activeMgr != nil {
-			mgrName = activeMgr.Name()
-		}
-		rep := reporter.New(deps.Config, deps.Grub, mgrName)
+		if deps.Config.HomeAssistant.URL != "" && deps.Config.HomeAssistant.WebhookID != "" {
+			tap.Message("Pushing initial boot options to Home Assistant...")
+			haClient := homeassistant.NewClient(deps.Config.HomeAssistant.URL, deps.Config.HomeAssistant.WebhookID, nil)
 
-		if token != "" {
-			if err := rep.RegisterDaemon(cmd.Context(), token); err != nil {
+			if token != "" {
+				if err := haClient.RegisterAgent(cmd.Context(), deps.Config.Host.MACAddress, deps.Config.Host.Address, token, deps.Config.Daemon.Port); err != nil {
+					return err
+				}
+			}
+
+			options, err := deps.Grub.GetBootOptions(cmd.Context())
+			if err != nil {
 				return err
 			}
-		}
 
-		if err := rep.PushBootOptions(cmd.Context()); err != nil {
-			return err
+			var wolAddr string
+			var wolPort int
+			if deps.Config.WakeOnLan != nil {
+				wolAddr = deps.Config.WakeOnLan.Address
+				wolPort = deps.Config.WakeOnLan.Port
+			}
+
+			if err := haClient.UpdateBootOptions(cmd.Context(), deps.Config.Host.MACAddress, deps.Config.Host.Address, options, wolAddr, wolPort); err != nil {
+				return err
+			}
+			tap.Message("Successfully pushed initial state to Home Assistant.")
 		}
-		tap.Message("Successfully pushed initial state to Home Assistant.")
 	}
 
 	tap.Message(fmt.Sprintf("Installing into service manager: %s", mgr.Name()))

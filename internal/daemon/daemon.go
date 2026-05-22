@@ -11,6 +11,9 @@ import (
 	"runtime"
 	"sync"
 	"time"
+
+	"github.com/jjack/grubstation/internal/grub"
+	"github.com/jjack/grubstation/internal/homeassistant"
 )
 
 func generateToken() (string, error) {
@@ -28,6 +31,12 @@ type Config struct {
 	APIKey            string
 	RetryInterval     time.Duration
 	ShutdownDelay     time.Duration
+
+	// Reporting fields
+	MACAddress          string
+	HostAddress         string
+	WolBroadcastAddress string
+	WolBroadcastPort    int
 }
 
 // Metadata holds system information.
@@ -41,19 +50,19 @@ type Metadata struct {
 type Daemon struct {
 	Config          Config
 	Metadata        Metadata
-	RegisterHandler func(ctx context.Context, token string) error
-	UpdateHandler   func(ctx context.Context) error
+	Grub            *grub.Grub
+	HAClient        *homeassistant.Client
 	ShutdownHandler func() error
 
 	mu sync.Mutex
 }
 
-func New(cfg Config, meta Metadata, regHandler func(ctx context.Context, token string) error, updateHandler func(ctx context.Context) error) *Daemon {
+func New(cfg Config, meta Metadata, g *grub.Grub, haClient *homeassistant.Client) *Daemon {
 	return &Daemon{
-		Config:          cfg,
-		Metadata:        meta,
-		RegisterHandler: regHandler,
-		UpdateHandler:   updateHandler,
+		Config:   cfg,
+		Metadata: meta,
+		Grub:     g,
+		HAClient: haClient,
 		ShutdownHandler: func() error {
 			return getShutdownCommand().Run()
 		},
@@ -69,12 +78,21 @@ func (d *Daemon) TriggerUpdate(ctx context.Context) error {
 		return nil
 	}
 
-	if d.UpdateHandler == nil {
-		return fmt.Errorf("UpdateHandler not configured")
+	if d.HAClient == nil {
+		return fmt.Errorf("homeassistant client not configured")
 	}
 
-	slog.Debug("Triggering boot options update")
-	if err := d.UpdateHandler(ctx); err != nil {
+	var bootOptions []string
+	if d.Grub != nil {
+		var err error
+		bootOptions, err = d.Grub.GetBootOptions(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get boot options: %w", err)
+		}
+	}
+
+	slog.Debug("Triggering boot options update to Home Assistant")
+	if err := d.HAClient.UpdateBootOptions(ctx, d.Config.MACAddress, d.Config.HostAddress, bootOptions, d.Config.WolBroadcastAddress, d.Config.WolBroadcastPort); err != nil {
 		return fmt.Errorf("update failed: %w", err)
 	}
 
@@ -97,17 +115,17 @@ func (d *Daemon) run(ctx context.Context) error {
 	}
 
 	// 1. Initial Handshake (Register + First Update) - PREREQUISITE
-	if d.RegisterHandler != nil {
+	if d.HAClient != nil {
 		backoff := d.Config.RetryInterval
 		if backoff == 0 {
 			backoff = 5 * time.Second
 		}
 		maxBackoff := 5 * time.Minute
 
-		slog.Info("Starting initial registration")
+		slog.Info("Starting initial registration with Home Assistant")
 	registrationLoop:
 		for {
-			if err := d.RegisterHandler(ctx, token); err != nil {
+			if err := d.HAClient.RegisterAgent(ctx, d.Config.MACAddress, d.Config.HostAddress, token, d.Config.Port); err != nil {
 				slog.Warn("Initial registration failed, retrying...", "error", err, "retry_in", backoff)
 				select {
 				case <-ctx.Done():

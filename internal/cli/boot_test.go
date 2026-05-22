@@ -16,6 +16,7 @@ import (
 	"github.com/jjack/grubstation/internal/config"
 	"github.com/jjack/grubstation/internal/daemon"
 	"github.com/jjack/grubstation/internal/grub"
+	"github.com/jjack/grubstation/internal/homeassistant"
 	"github.com/jjack/grubstation/internal/servicemanager"
 )
 
@@ -114,9 +115,20 @@ func TestBootPushCmd_Socket(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	d := daemon.New(daemon.Config{}, daemon.Metadata{}, nil, func(ctx context.Context) error {
-		return nil
-	})
+	// Start a dummy Home Assistant server for registration
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	}))
+	defer ts.Close()
+
+	deps := &CommandDeps{
+		Config: &config.Config{
+			HomeAssistant: config.HomeAssistantConfig{URL: ts.URL, WebhookID: "fake"},
+		},
+	}
+	haClient := homeassistant.NewClient(ts.URL, "fake", nil)
+	d := daemon.New(daemon.Config{ReportBootOptions: true}, daemon.Metadata{}, nil, haClient)
 	go func() { _ = d.Run(ctx) }()
 
 	// Wait for socket
@@ -132,7 +144,6 @@ func TestBootPushCmd_Socket(t *testing.T) {
 		t.Fatal("socket was never created")
 	}
 
-	deps := &CommandDeps{}
 	cmd := NewBootPushCmd(deps)
 	var out bytes.Buffer
 	cmd.SetOut(&out)

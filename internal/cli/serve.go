@@ -1,14 +1,13 @@
 package cli
 
 import (
-	"context"
 	"log/slog"
 
 	"github.com/jjack/grubstation/internal/config"
 	"github.com/jjack/grubstation/internal/daemon"
 	"github.com/jjack/grubstation/internal/grub"
+	"github.com/jjack/grubstation/internal/homeassistant"
 	"github.com/jjack/grubstation/internal/host"
-	"github.com/jjack/grubstation/internal/reporter"
 	"github.com/jjack/grubstation/internal/version"
 	"github.com/spf13/cobra"
 )
@@ -18,18 +17,11 @@ func NewServeCmd(deps *CommandDeps) *cobra.Command {
 		Use:   "serve",
 		Short: "Run the persistent agent daemon",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			var regHandler func(ctx context.Context, token string) error
-			var updateHandler func(ctx context.Context) error
-
 			mgr, _ := deps.Manager(cmd.Context())
 			mgrName := ""
 			if activeMgr := mgr; activeMgr != nil {
 				mgrName = activeMgr.Name()
 			}
-
-			rep := reporter.New(deps.Config, deps.Grub, mgrName)
-			regHandler = rep.RegisterDaemon
-			updateHandler = rep.PushBootOptions
 
 			if deps.Config.Daemon.ReportBootOptions {
 				// Drift detection
@@ -56,15 +48,33 @@ func NewServeCmd(deps *CommandDeps) *cobra.Command {
 					slog.Debug("Failed to check for GRUB drift", "error", err)
 				}
 			}
+
+			var haClient *homeassistant.Client
+			if deps.Config.HomeAssistant.URL != "" && deps.Config.HomeAssistant.WebhookID != "" {
+				haClient = homeassistant.NewClient(deps.Config.HomeAssistant.URL, deps.Config.HomeAssistant.WebhookID, nil)
+			}
+
+			var wolAddr string
+			var wolPort int
+			if deps.Config.WakeOnLan != nil {
+				wolAddr = deps.Config.WakeOnLan.Address
+				wolPort = deps.Config.WakeOnLan.Port
+			}
+
 			d := daemon.New(daemon.Config{
-				Port:              deps.Config.Daemon.Port,
-				ReportBootOptions: deps.Config.Daemon.ReportBootOptions,
-				APIKey:            deps.Config.Daemon.APIKey,
+				Port:                deps.Config.Daemon.Port,
+				ReportBootOptions:   deps.Config.Daemon.ReportBootOptions,
+				APIKey:              deps.Config.Daemon.APIKey,
+				MACAddress:          deps.Config.Host.MACAddress,
+				HostAddress:         deps.Config.Host.Address,
+				WolBroadcastAddress: wolAddr,
+				WolBroadcastPort:    wolPort,
 			}, daemon.Metadata{
 				OS:             host.Platform(),
 				Version:        version.Version,
 				ServiceManager: mgrName,
-			}, regHandler, updateHandler)
+			}, deps.Grub, haClient)
+
 			return d.Run(cmd.Context())
 		},
 	}

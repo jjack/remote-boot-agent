@@ -90,12 +90,7 @@ func NewServiceRemoveCmd(deps *CommandDeps) *cobra.Command {
 
 				cmd.Printf("Unregistering from Home Assistant...\n")
 				client := homeassistant.NewClient(deps.Config.HomeAssistant.URL, deps.Config.HomeAssistant.WebhookID, nil)
-				payload := homeassistant.CommonPayload{
-					Action:     homeassistant.ActionUnregisterHost,
-					MACAddress: mac,
-					Address:    addr,
-				}
-				if err := client.PostWebhook(cmd.Context(), payload); err != nil {
+				if err := client.UnregisterHost(cmd.Context(), mac, addr); err != nil {
 					cmd.Printf("Warning: failed to unregister from Home Assistant: %v\n", err)
 				}
 			}

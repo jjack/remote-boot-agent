@@ -98,3 +98,39 @@ func (c *Client) PostWebhook(ctx context.Context, payload any) error {
 
 	return nil
 }
+
+func (c *Client) RegisterAgent(ctx context.Context, mac, addr, token string, port int) error {
+	payload := RegistrationPayload{
+		CommonPayload: CommonPayload{
+			Action:     ActionRegisterAction,
+			MACAddress: mac,
+			Address:    addr,
+		},
+		AgentToken: token,
+		AgentPort:  port,
+	}
+	return c.PostWebhook(ctx, payload)
+}
+
+func (c *Client) UpdateBootOptions(ctx context.Context, mac, addr string, options []string, wolAddr string, wolPort int) error {
+	payload := UpdatePayload{
+		CommonPayload: CommonPayload{
+			Action:     ActionUpdateAction,
+			MACAddress: mac,
+			Address:    addr,
+		},
+		BootOptions:         options,
+		WolBroadcastAddress: wolAddr,
+		WolBroadcastPort:    wolPort,
+	}
+	return c.PostWebhook(ctx, payload)
+}
+
+func (c *Client) UnregisterHost(ctx context.Context, mac, addr string) error {
+	payload := CommonPayload{
+		Action:     ActionUnregisterHost,
+		MACAddress: mac,
+		Address:    addr,
+	}
+	return c.PostWebhook(ctx, payload)
+}
