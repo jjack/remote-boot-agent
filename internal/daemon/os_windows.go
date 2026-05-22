@@ -6,6 +6,6 @@ import (
 	"os/exec"
 )
 
-func getShutdownCommand() *exec.Cmd {
-	return exec.Command("shutdown", "/s", "/t", "0")
+func shutdownSystem() error {
+	return exec.Command("shutdown", "/s", "/t", "0").Run()
 }

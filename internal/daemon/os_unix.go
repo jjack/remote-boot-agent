@@ -6,6 +6,6 @@ import (
 	"os/exec"
 )
 
-func getShutdownCommand() *exec.Cmd {
-	return exec.Command("poweroff")
+func shutdownSystem() error {
+	return exec.Command("poweroff").Run()
 }
