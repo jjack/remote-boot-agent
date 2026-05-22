@@ -272,10 +272,10 @@ func TestSetupCmd_Execute(t *testing.T) {
 			initReg.Register("mock-init", func() servicemanager.Manager { return initMock })
 
 			deps := &CommandDeps{
-				Config:   &config.Config{},
-				Grub:     grub.NewGrub(),
-				Registry: initReg,
-				Host:     host.New(),
+				Config:     &config.Config{},
+				Grub:       grub.NewGrub(),
+				Registry:   initReg,
+				Host:       host.New(),
 				SaveConfig: func(cfg *config.Config, path string) error { return nil },
 				DiscoverHA: func(ctx context.Context) ([]homeassistant.ServiceInstance, error) { return nil, nil },
 			}
