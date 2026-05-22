@@ -15,7 +15,6 @@ import (
 	"github.com/jjack/grubstation/internal/config"
 	"github.com/jjack/grubstation/internal/grub"
 	"github.com/jjack/grubstation/internal/homeassistant"
-	"github.com/jjack/grubstation/internal/host"
 	"github.com/jjack/grubstation/internal/servicemanager"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -132,8 +131,8 @@ func doWizard(ctx context.Context, deps *CommandDeps, cfgPath string, currentPor
 	}
 
 	// Perform initial discovery
-	hostname, _ := host.DetectHostname()
-	interfaces, _ := host.GetWOLInterfaces()
+	hostname, _ := deps.Host.DetectHostname()
+	interfaces, _ := deps.Host.GetWOLInterfaces()
 	grubConfigPath, _ := deps.Grub.DiscoverConfigPath(ctx)
 
 	state := wizard.SystemState{
@@ -144,7 +143,7 @@ func doWizard(ctx context.Context, deps *CommandDeps, cfgPath string, currentPor
 		CurrentPort:    currentPort,
 	}
 
-	cfg, err := wizard.RunGenerateSurvey(ctx, state, dryRun)
+	cfg, err := wizard.RunGenerateSurvey(ctx, state, dryRun, deps.Host.GetIPInfo, deps.Host.GetFQDN, deps.DiscoverHA)
 	if err != nil {
 		if errors.Is(err, wizard.ErrAborted) {
 			tap.Message("Setup aborted.")

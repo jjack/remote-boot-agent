@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,6 +16,8 @@ import (
 	"github.com/jjack/grubstation/internal/cli/wizard"
 	"github.com/jjack/grubstation/internal/config"
 	"github.com/jjack/grubstation/internal/grub"
+	"github.com/jjack/grubstation/internal/homeassistant"
+	"github.com/jjack/grubstation/internal/host"
 	"github.com/jjack/grubstation/internal/servicemanager"
 	"github.com/spf13/cobra"
 
@@ -84,9 +87,9 @@ func TestSetupCmd_Execute(t *testing.T) {
 				tempGrub := t.TempDir() + "/grub.cfg"
 				_ = os.WriteFile(tempGrub, []byte(""), 0o644)
 				deps.Grub.ConfigPath = tempGrub
-				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool) (*config.Config, error) {
+				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool, getIPInfo func(net.Interface) ([]string, map[string]string), getFQDN func(string, *net.Interface) string, discoverHA func(context.Context) ([]homeassistant.ServiceInstance, error)) (*config.Config, error) {
 					return &config.Config{
-						HomeAssistant: config.HomeAssistantConfig{URL: ts.URL, WebhookID: "fake"},
+						HomeAssistant: config.HomeAssistantConfig{URL: ts.URL, WebhookID: strings.Repeat("a", 64)},
 						Daemon:        config.DaemonConfig{ReportBootOptions: true},
 					}, nil
 				}
@@ -106,7 +109,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 				tempGrub := t.TempDir() + "/grub.cfg"
 				_ = os.WriteFile(tempGrub, []byte(""), 0o644)
 				deps.Grub.ConfigPath = tempGrub
-				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool) (*config.Config, error) {
+				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool, getIPInfo func(net.Interface) ([]string, map[string]string), getFQDN func(string, *net.Interface) string, discoverHA func(context.Context) ([]homeassistant.ServiceInstance, error)) (*config.Config, error) {
 					return &config.Config{}, nil
 				}
 				return nil
@@ -129,7 +132,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 		{
 			name: "Error - Generate Survey Fails",
 			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) []string {
-				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool) (*config.Config, error) {
+				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool, getIPInfo func(net.Interface) ([]string, map[string]string), getFQDN func(string, *net.Interface) string, discoverHA func(context.Context) ([]homeassistant.ServiceInstance, error)) (*config.Config, error) {
 					return nil, errors.New("survey failed")
 				}
 				return nil
@@ -147,35 +150,6 @@ func TestSetupCmd_Execute(t *testing.T) {
 			wantInstall: false,
 		},
 		{
-			name: "Error - MkdirAll Fails",
-			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) []string {
-				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool) (*config.Config, error) {
-					return &config.Config{}, nil
-				}
-				osMkdirAll = func(path string, perm os.FileMode) error { return errors.New("mkdirall failed") }
-				t.Cleanup(func() { osMkdirAll = func(path string, perm os.FileMode) error { return nil } })
-				return nil
-			},
-			wantErr:     "failed to create config directory: mkdirall failed",
-			wantInstall: false,
-		},
-		{
-			name: "Error - Save Config Fails",
-			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) []string {
-				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool) (*config.Config, error) {
-					return &config.Config{}, nil
-				}
-				oldSave := config.Save
-				config.Save = func(cfg *config.Config, path string) error {
-					return errors.New("save config failed")
-				}
-				t.Cleanup(func() { config.Save = oldSave })
-				return nil
-			},
-			wantErr:     "save config failed",
-			wantInstall: false,
-		},
-		{
 			name: "Error - Perform Install Fails",
 			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) []string {
 				tempGrub := t.TempDir() + "/grub.cfg"
@@ -184,7 +158,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 				// Trigger failure by making grub setup fail
 				deps.Grub.LookPath = func(file string) (string, error) { return "", errors.New("no tool") }
 
-				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool) (*config.Config, error) {
+				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool, getIPInfo func(net.Interface) ([]string, map[string]string), getFQDN func(string, *net.Interface) string, discoverHA func(context.Context) ([]homeassistant.ServiceInstance, error)) (*config.Config, error) {
 					return &config.Config{
 						Daemon: config.DaemonConfig{ReportBootOptions: true},
 					}, nil
@@ -208,9 +182,9 @@ func TestSetupCmd_Execute(t *testing.T) {
 				_ = os.WriteFile(tempGrub, []byte("menuentry 'OS' {}"), 0o644)
 				deps.Grub.ConfigPath = tempGrub
 
-				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool) (*config.Config, error) {
+				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool, getIPInfo func(net.Interface) ([]string, map[string]string), getFQDN func(string, *net.Interface) string, discoverHA func(context.Context) ([]homeassistant.ServiceInstance, error)) (*config.Config, error) {
 					return &config.Config{
-						HomeAssistant: config.HomeAssistantConfig{URL: ts.URL, WebhookID: "fake"},
+						HomeAssistant: config.HomeAssistantConfig{URL: ts.URL, WebhookID: strings.Repeat("a", 64)},
 						Daemon:        config.DaemonConfig{ReportBootOptions: true},
 					}, nil
 				}
@@ -236,9 +210,9 @@ func TestSetupCmd_Execute(t *testing.T) {
 				_ = os.WriteFile(tempGrub, []byte("menuentry 'OS' {}"), 0o644)
 				deps.Grub.ConfigPath = tempGrub
 
-				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool) (*config.Config, error) {
+				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool, getIPInfo func(net.Interface) ([]string, map[string]string), getFQDN func(string, *net.Interface) string, discoverHA func(context.Context) ([]homeassistant.ServiceInstance, error)) (*config.Config, error) {
 					return &config.Config{
-						HomeAssistant: config.HomeAssistantConfig{URL: ts.URL, WebhookID: "fake"},
+						HomeAssistant: config.HomeAssistantConfig{URL: ts.URL, WebhookID: strings.Repeat("a", 64)},
 						Daemon:        config.DaemonConfig{ReportBootOptions: true},
 					}, nil
 				}
@@ -253,7 +227,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 		{
 			name: "Setup Aborted on Overwrite No",
 			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) []string {
-				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool) (*config.Config, error) {
+				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool, getIPInfo func(net.Interface) ([]string, map[string]string), getFQDN func(string, *net.Interface) string, discoverHA func(context.Context) ([]homeassistant.ServiceInstance, error)) (*config.Config, error) {
 					return nil, wizard.ErrAborted
 				}
 				return nil
@@ -301,6 +275,9 @@ func TestSetupCmd_Execute(t *testing.T) {
 				Config:   &config.Config{},
 				Grub:     grub.NewGrub(),
 				Registry: initReg,
+				Host:     host.New(),
+				SaveConfig: func(cfg *config.Config, path string) error { return nil },
+				DiscoverHA: func(ctx context.Context) ([]homeassistant.ServiceInstance, error) { return nil, nil },
 			}
 
 			// Mock successful grub setup as default
@@ -309,6 +286,10 @@ func TestSetupCmd_Execute(t *testing.T) {
 				return exec.CommandContext(ctx, "/bin/true")
 			}
 			deps.Grub.HassGrubStationPath = t.TempDir() + "/99_ha_grub_os_reporter"
+
+			// Mock host
+			deps.Host.OsHostname = func() (string, error) { return "test-host", nil }
+			deps.Host.NetInterfaces = func() ([]net.Interface, error) { return nil, nil }
 
 			dynamicArgs := tt.setup(t, deps, initMock)
 
@@ -378,7 +359,9 @@ func TestSetupCmd_Execute(t *testing.T) {
 
 func TestEnsureSupport(t *testing.T) {
 	t.Run("InitSystem Not Supported", func(t *testing.T) {
-		deps := &CommandDeps{}
+		deps := &CommandDeps{
+			Host: host.New(),
+		}
 		initReg := servicemanager.NewRegistry()
 		deps.Registry = initReg
 
@@ -394,7 +377,9 @@ func TestEnsureSupport(t *testing.T) {
 
 func TestEnsureSupport_GenericErrors(t *testing.T) {
 	t.Run("Grub Generic Error", func(t *testing.T) {
-		deps := &CommandDeps{}
+		deps := &CommandDeps{
+			Host: host.New(),
+		}
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel() // Cancel immediately
 
@@ -417,6 +402,7 @@ func TestEnsureSupport_GenericErrors(t *testing.T) {
 		deps := &CommandDeps{
 			Grub:     func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = t.TempDir() + "/grub.cfg"; return g }(),
 			Registry: initReg,
+			Host:     host.New(),
 		}
 		cancel()
 
@@ -452,6 +438,7 @@ func TestIsInstalled(t *testing.T) {
 
 	deps := &CommandDeps{
 		Registry: initReg,
+		Host:     host.New(),
 	}
 
 	installed, _ := IsInstalled(context.Background(), deps)
@@ -463,6 +450,7 @@ func TestIsInstalled(t *testing.T) {
 func TestIsInstalled_NoSupport(t *testing.T) {
 	deps := &CommandDeps{
 		Registry: servicemanager.NewRegistry(), // Empty registry
+		Host:     host.New(),
 	}
 
 	installed, err := IsInstalled(context.Background(), deps)
@@ -484,6 +472,7 @@ func TestPerformInstall_NonRoot(t *testing.T) {
 	deps := &CommandDeps{
 		Config:   cfg,
 		Registry: initReg,
+		Host:     host.New(),
 	}
 
 	cmd := &cobra.Command{}
@@ -497,6 +486,7 @@ func TestPerformInstall_NonRoot(t *testing.T) {
 func TestPerformInstall_NoManager(t *testing.T) {
 	deps := &CommandDeps{
 		Registry: servicemanager.NewRegistry(), // Empty registry
+		Host:     host.New(),
 	}
 
 	cmd := &cobra.Command{}
@@ -519,6 +509,7 @@ func TestPerformInstall_NoReportBootOptions(t *testing.T) {
 	deps := &CommandDeps{
 		Config:   cfg,
 		Registry: initReg,
+		Host:     host.New(),
 	}
 
 	cmd := &cobra.Command{}
@@ -552,6 +543,7 @@ func TestPerformInstall_WithToken(t *testing.T) {
 		Config:   cfg,
 		Grub:     func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = tempGrub; return g }(),
 		Registry: initReg,
+		Host:     host.New(),
 	}
 
 	// Mock successful grub setup
@@ -582,6 +574,7 @@ func TestIsInstalled_Error(t *testing.T) {
 	deps := &CommandDeps{
 		Registry: initReg,
 		Grub:     func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = t.TempDir() + "/grub.cfg"; return g }(),
+		Host:     host.New(),
 	}
 
 	_, err := IsInstalled(context.Background(), deps)

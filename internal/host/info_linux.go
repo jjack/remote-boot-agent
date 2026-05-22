@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-func isPhysicalInterface(inf net.Interface) bool {
+func (h *Host) isPhysicalInterface(inf net.Interface) bool {
 	virtualInterfaces := []string{"veth", "docker", "br-", "virbr", "vmnet", "vboxnet"}
 	for _, prefix := range virtualInterfaces {
 		if strings.HasPrefix(inf.Name, prefix) {
@@ -20,7 +20,7 @@ func isPhysicalInterface(inf net.Interface) bool {
 	}
 
 	path := fmt.Sprintf("/sys/class/net/%s/device", inf.Name)
-	_, err := OsStat(path)
+	_, err := h.OsStat(path)
 	return !os.IsNotExist(err)
 }
 
@@ -29,8 +29,8 @@ func Platform() string {
 }
 
 // GetFQDN attempts to resolve the Fully Qualified Domain Name for a given hostname.
-var GetFQDN = func(hostname string, _ *net.Interface) string {
-	if cname, err := NetLookupCNAME(hostname); err == nil && cname != "" {
+func (h *Host) GetFQDN(hostname string, _ *net.Interface) string {
+	if cname, err := h.NetLookupCNAME(hostname); err == nil && cname != "" {
 		return strings.TrimSuffix(cname, ".")
 	}
 	return hostname

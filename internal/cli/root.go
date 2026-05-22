@@ -8,6 +8,8 @@ import (
 
 	"github.com/jjack/grubstation/internal/config"
 	"github.com/jjack/grubstation/internal/grub"
+	"github.com/jjack/grubstation/internal/homeassistant"
+	"github.com/jjack/grubstation/internal/host"
 	"github.com/jjack/grubstation/internal/servicemanager"
 	"github.com/jjack/grubstation/internal/version"
 	"github.com/spf13/cobra"
@@ -24,6 +26,9 @@ type CommandDeps struct {
 	ConfigFile string
 	Grub       *grub.Grub
 	Registry   *servicemanager.Registry
+	Host       *host.Host
+	SaveConfig func(*config.Config, string) error
+	DiscoverHA func(context.Context) ([]homeassistant.ServiceInstance, error)
 }
 
 func (cd *CommandDeps) Manager(ctx context.Context) (servicemanager.Manager, error) {
@@ -73,9 +78,12 @@ func NewCLI() *CLI {
 	cli := &CLI{}
 
 	deps := &CommandDeps{
-		Config:   &config.Config{},
-		Grub:     grub.NewGrub(),
-		Registry: servicemanager.NewRegistry(),
+		Config:     &config.Config{},
+		Grub:       grub.NewGrub(),
+		Registry:   servicemanager.NewRegistry(),
+		Host:       host.New(),
+		SaveConfig: config.Save,
+		DiscoverHA: homeassistant.Discover,
 	}
 
 	var cfgFile string

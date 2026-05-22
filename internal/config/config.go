@@ -154,7 +154,7 @@ func Unmarshal(v *viper.Viper) (*Config, error) {
 	return &cfg, nil
 }
 
-var Save = func(cfg *Config, path string) error {
+func Save(cfg *Config, path string) error {
 	exporter := &Exporter{Config: *cfg}
 	out, err := exporter.ToYAML()
 	if err != nil {

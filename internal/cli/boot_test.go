@@ -196,6 +196,7 @@ func TestBootPushCmd_Direct_WithWOL(t *testing.T) {
 		t.Errorf("expected success message, got %q", out.String())
 	}
 }
+
 func TestBootPushCmd_Direct_Error(t *testing.T) {
 	t.Run("MissingConfig", func(t *testing.T) {
 		deps := &CommandDeps{Config: &config.Config{}}

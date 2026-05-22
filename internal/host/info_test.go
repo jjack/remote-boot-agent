@@ -9,23 +9,18 @@ import (
 )
 
 func TestGetWOLInterfaces(t *testing.T) {
-	oldNetInterfaces := NetInterfaces
-	oldOsStat := OsStat
-	defer func() {
-		NetInterfaces = oldNetInterfaces
-		OsStat = oldOsStat
-	}()
+	h := New()
 
 	mac, _ := net.ParseMAC("aa:bb:cc:dd:ee:ff")
-	NetInterfaces = func() ([]net.Interface, error) {
+	h.NetInterfaces = func() ([]net.Interface, error) {
 		return []net.Interface{{Name: "eth0", HardwareAddr: mac, Flags: net.FlagUp}}, nil
 	}
 
-	OsStat = func(name string) (os.FileInfo, error) {
+	h.OsStat = func(name string) (os.FileInfo, error) {
 		return nil, nil // mock device file exists
 	}
 
-	opts, err := GetWOLInterfaces()
+	opts, err := h.GetWOLInterfaces()
 	if err != nil {
 		t.Fatalf("unexpected error getting interfaces: %v", err)
 	}
@@ -46,7 +41,8 @@ func TestGetWOLInterfaces(t *testing.T) {
 }
 
 func TestDetectHostname(t *testing.T) {
-	hostname, err := DetectHostname()
+	h := New()
+	hostname, err := h.DetectHostname()
 	if err != nil {
 		t.Fatalf("unexpected error detecting hostname: %v", err)
 	}
@@ -62,14 +58,12 @@ func TestDetectHostname(t *testing.T) {
 }
 
 func TestDetectHostname_Error(t *testing.T) {
-	oldOsHostname := OsHostname
-	defer func() { OsHostname = oldOsHostname }()
-
-	OsHostname = func() (string, error) {
+	h := New()
+	h.OsHostname = func() (string, error) {
 		return "", errors.New("mock hostname error")
 	}
 
-	_, err := DetectHostname()
+	_, err := h.DetectHostname()
 	if err == nil {
 		t.Fatal("expected error detecting hostname, got nil")
 	}
@@ -79,14 +73,12 @@ func TestDetectHostname_Error(t *testing.T) {
 }
 
 func TestGetWOLInterfaces_Error(t *testing.T) {
-	oldNetInterfaces := NetInterfaces
-	defer func() { NetInterfaces = oldNetInterfaces }()
-
-	NetInterfaces = func() ([]net.Interface, error) {
+	h := New()
+	h.NetInterfaces = func() ([]net.Interface, error) {
 		return nil, errors.New("mock interfaces error")
 	}
 
-	_, err := GetWOLInterfaces()
+	_, err := h.GetWOLInterfaces()
 	if err == nil {
 		t.Fatal("expected error getting interface options, got nil")
 	}
@@ -96,10 +88,8 @@ func TestGetWOLInterfaces_Error(t *testing.T) {
 }
 
 func TestGetWOLInterfaces_NoSuitable(t *testing.T) {
-	oldNetInterfaces := NetInterfaces
-	defer func() { NetInterfaces = oldNetInterfaces }()
-
-	NetInterfaces = func() ([]net.Interface, error) {
+	h := New()
+	h.NetInterfaces = func() ([]net.Interface, error) {
 		// Return an interface that will be skipped (no MAC)
 		return []net.Interface{
 			{
@@ -110,7 +100,7 @@ func TestGetWOLInterfaces_NoSuitable(t *testing.T) {
 		}, nil
 	}
 
-	_, err := GetWOLInterfaces()
+	_, err := h.GetWOLInterfaces()
 	if err == nil {
 		t.Fatal("expected error for no suitable interfaces, got nil")
 	}
@@ -120,6 +110,7 @@ func TestGetWOLInterfaces_NoSuitable(t *testing.T) {
 }
 
 func TestIsWOLCapableInterface(t *testing.T) {
+	h := New()
 	mac, _ := net.ParseMAC("00:11:22:33:44:55")
 
 	tests := []struct {
@@ -146,7 +137,7 @@ func TestIsWOLCapableInterface(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := isWOLCapableInterface(tt.inf); got != tt.expected {
+			if got := h.isWOLCapableInterface(tt.inf); got != tt.expected {
 				t.Errorf("isWOLCapableInterface() = %v, want %v", got, tt.expected)
 			}
 		})
@@ -154,16 +145,14 @@ func TestIsWOLCapableInterface(t *testing.T) {
 }
 
 func TestGetIPv4Info(t *testing.T) {
-	oldGetAddrs := GetAddrs
-	defer func() { GetAddrs = oldGetAddrs }()
-
-	GetAddrs = func(iface net.Interface) ([]net.Addr, error) {
+	h := New()
+	h.GetAddrs = func(iface net.Interface) ([]net.Addr, error) {
 		ip, ipnet, _ := net.ParseCIDR("192.168.1.50/24")
 		ipnet.IP = ip
 		return []net.Addr{ipnet}, nil
 	}
 
-	ips, broadcasts := GetIPInfo(net.Interface{Name: "eth0"})
+	ips, broadcasts := h.GetIPInfo(net.Interface{Name: "eth0"})
 	if len(ips) != 1 || ips[0] != "192.168.1.50" {
 		t.Errorf("expected ips to contain 192.168.1.50, got %v", ips)
 	}
@@ -173,17 +162,15 @@ func TestGetIPv4Info(t *testing.T) {
 }
 
 func TestGetIPInfo_FiltersIPv6(t *testing.T) {
-	oldGetAddrs := GetAddrs
-	defer func() { GetAddrs = oldGetAddrs }()
-
-	GetAddrs = func(iface net.Interface) ([]net.Addr, error) {
+	h := New()
+	h.GetAddrs = func(iface net.Interface) ([]net.Addr, error) {
 		ip4, ipv4net, _ := net.ParseCIDR("192.168.1.50/24")
 		ipv4net.IP = ip4
 		_, ipv6net, _ := net.ParseCIDR("fd00::1/64")
 		return []net.Addr{ipv4net, ipv6net}, nil
 	}
 
-	ips, _ := GetIPInfo(net.Interface{Name: "eth0"})
+	ips, _ := h.GetIPInfo(net.Interface{Name: "eth0"})
 	if len(ips) != 1 {
 		t.Errorf("expected 1 ip, got %d (%v)", len(ips), ips)
 	}
@@ -201,14 +188,12 @@ func TestGetLastIP_IPv6(t *testing.T) {
 }
 
 func TestGetIPv4Info_Error(t *testing.T) {
-	oldGetAddrs := GetAddrs
-	defer func() { GetAddrs = oldGetAddrs }()
-
-	GetAddrs = func(iface net.Interface) ([]net.Addr, error) {
+	h := New()
+	h.GetAddrs = func(iface net.Interface) ([]net.Addr, error) {
 		return nil, errors.New("mock addrs error")
 	}
 
-	ips, broadcasts := GetIPInfo(net.Interface{Name: "eth0"})
+	ips, broadcasts := h.GetIPInfo(net.Interface{Name: "eth0"})
 	if len(ips) != 0 {
 		t.Errorf("expected no ips on error, got %v", ips)
 	}
@@ -218,14 +203,12 @@ func TestGetIPv4Info_Error(t *testing.T) {
 }
 
 func TestGetIPv4Info_NonIPNet(t *testing.T) {
-	oldGetAddrs := GetAddrs
-	defer func() { GetAddrs = oldGetAddrs }()
-
-	GetAddrs = func(iface net.Interface) ([]net.Addr, error) {
+	h := New()
+	h.GetAddrs = func(iface net.Interface) ([]net.Addr, error) {
 		return []net.Addr{&net.UnixAddr{Name: "test", Net: "unix"}}, nil
 	}
 
-	ips, broadcasts := GetIPInfo(net.Interface{Name: "eth0"})
+	ips, broadcasts := h.GetIPInfo(net.Interface{Name: "eth0"})
 	if len(ips) != 0 {
 		t.Errorf("expected 0 ips, got %d", len(ips))
 	}
@@ -235,23 +218,21 @@ func TestGetIPv4Info_NonIPNet(t *testing.T) {
 }
 
 func TestGetFQDN(t *testing.T) {
-	oldLookupCNAME := NetLookupCNAME
-	defer func() { NetLookupCNAME = oldLookupCNAME }()
-
-	NetLookupCNAME = func(name string) (string, error) {
+	h := New()
+	h.NetLookupCNAME = func(name string) (string, error) {
 		return name + ".local.lan.", nil
 	}
 
-	fqdn := GetFQDN("my-host", nil)
+	fqdn := h.GetFQDN("my-host", nil)
 	if fqdn != "my-host.local.lan" {
 		t.Errorf("expected my-host.local.lan, got %s", fqdn)
 	}
 
-	NetLookupCNAME = func(name string) (string, error) {
+	h.NetLookupCNAME = func(name string) (string, error) {
 		return "", errors.New("lookup failed")
 	}
 
-	fqdn = GetFQDN("my-host", nil)
+	fqdn = h.GetFQDN("my-host", nil)
 	if fqdn != "my-host" {
 		t.Errorf("expected fallback to short hostname 'my-host', got %s", fqdn)
 	}

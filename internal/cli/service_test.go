@@ -5,13 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -158,8 +159,8 @@ func TestServiceStatusCmd(t *testing.T) {
 	defer ts.Close()
 
 	// Extract port from ts.URL
-	var port int
-	_, _ = fmt.Sscanf(ts.URL, "http://127.0.0.1:%d", &port)
+	u, _ := url.Parse(ts.URL)
+	port, _ := strconv.Atoi(u.Port())
 
 	initReg := servicemanager.NewRegistry()
 	mock := &mockServiceManager{name: "mock-svc", active: true}
@@ -218,8 +219,8 @@ func TestServiceStatusCmd_NonOK(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	var port int
-	_, _ = fmt.Sscanf(ts.URL, "http://127.0.0.1:%d", &port)
+	u, _ := url.Parse(ts.URL)
+	port, _ := strconv.Atoi(u.Port())
 
 	initReg := servicemanager.NewRegistry()
 	mock := &mockServiceManager{name: "mock-svc", active: true}
@@ -366,24 +367,16 @@ func TestServiceRemoveCmd_UnregisterFallback(t *testing.T) {
 
 	hwAddr, _ := net.ParseMAC("00:11:22:33:44:55")
 
-	// Mock host package
-	oldNetInterfaces := host.NetInterfaces
-	oldGetAddrs := host.GetAddrs
-	oldOsStat := host.OsStat
-	host.NetInterfaces = func() ([]net.Interface, error) {
+	h := host.New()
+	h.NetInterfaces = func() ([]net.Interface, error) {
 		return []net.Interface{{Name: "eth0", HardwareAddr: hwAddr, Flags: net.FlagUp}}, nil
 	}
-	host.GetAddrs = func(iface net.Interface) ([]net.Addr, error) {
+	h.GetAddrs = func(iface net.Interface) ([]net.Addr, error) {
 		return []net.Addr{&net.IPNet{IP: net.ParseIP("192.168.1.10"), Mask: net.CIDRMask(24, 32)}}, nil
 	}
-	host.OsStat = func(name string) (os.FileInfo, error) {
+	h.OsStat = func(name string) (os.FileInfo, error) {
 		return nil, nil // mock device file exists
 	}
-	t.Cleanup(func() {
-		host.NetInterfaces = oldNetInterfaces
-		host.GetAddrs = oldGetAddrs
-		host.OsStat = oldOsStat
-	})
 
 	deps := &CommandDeps{
 		Config: &config.Config{
@@ -393,6 +386,7 @@ func TestServiceRemoveCmd_UnregisterFallback(t *testing.T) {
 			},
 		},
 		Registry: initReg,
+		Host:     h,
 	}
 
 	cmd := NewServiceRemoveCmd(deps)

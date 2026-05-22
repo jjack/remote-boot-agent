@@ -26,8 +26,6 @@ func isSupportedURL(url string) bool {
 	return url != "" && (strings.HasPrefix(strings.ToLower(url), "http://") || strings.HasPrefix(strings.ToLower(url), "https://"))
 }
 
-var DiscoverFunc = Discover
-
 func Discover(ctx context.Context) ([]ServiceInstance, error) {
 	slog.Debug("Starting Home Assistant discovery via zeroconf", "service", homeAssistantService, "domain", searchDomain)
 

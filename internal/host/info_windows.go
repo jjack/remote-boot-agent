@@ -12,7 +12,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-func isPhysicalInterface(inf net.Interface) bool {
+func (h *Host) isPhysicalInterface(inf net.Interface) bool {
 	var row windows.MibIfRow2
 	row.InterfaceIndex = uint32(inf.Index)
 
@@ -32,7 +32,7 @@ func Platform() string {
 	return "windows"
 }
 
-var getAdapterDNSSuffix = func(ifIndex uint32) string {
+func (h *Host) getAdapterDNSSuffix(ifIndex uint32) string {
 	// GetAdaptersAddresses is used to retrieve DNS suffixes.
 	// We use GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_FRIENDLY_NAME
 	flags := uint32(windows.GAA_FLAG_SKIP_ANYCAST | windows.GAA_FLAG_SKIP_MULTICAST | windows.GAA_FLAG_SKIP_FRIENDLY_NAME)
@@ -61,14 +61,14 @@ var getAdapterDNSSuffix = func(ifIndex uint32) string {
 
 // GetFQDN attempts to resolve the Fully Qualified Domain Name for a given hostname.
 // On Windows, it tries to append the Connection-specific DNS Suffix of the provided interface.
-var GetFQDN = func(hostname string, inf *net.Interface) string {
+func (h *Host) GetFQDN(hostname string, inf *net.Interface) string {
 	if inf != nil {
-		if suffix := getAdapterDNSSuffix(uint32(inf.Index)); suffix != "" {
+		if suffix := h.getAdapterDNSSuffix(uint32(inf.Index)); suffix != "" {
 			return fmt.Sprintf("%s.%s", hostname, suffix)
 		}
 	}
 
-	if cname, err := NetLookupCNAME(hostname); err == nil && cname != "" {
+	if cname, err := h.NetLookupCNAME(hostname); err == nil && cname != "" {
 		return strings.TrimSuffix(cname, ".")
 	}
 	return hostname

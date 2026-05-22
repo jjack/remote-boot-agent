@@ -12,7 +12,6 @@ import (
 
 	"github.com/jjack/grubstation/internal/config"
 	"github.com/jjack/grubstation/internal/homeassistant"
-	"github.com/jjack/grubstation/internal/host"
 	"github.com/spf13/cobra"
 	"github.com/yarlson/tap"
 )
@@ -26,19 +25,19 @@ type SystemState struct {
 }
 
 var (
-	RunGenerateSurvey func(context.Context, SystemState, bool) (*config.Config, error) = generateConfigInteractive
+	RunGenerateSurvey func(context.Context, SystemState, bool, func(net.Interface) ([]string, map[string]string), func(string, *net.Interface) string, func(context.Context) ([]homeassistant.ServiceInstance, error)) (*config.Config, error) = generateConfigInteractive
 
 	ErrAborted = errors.New("setup aborted")
 )
 
-func generateConfigInteractive(ctx context.Context, state SystemState, isDryRun bool) (*config.Config, error) {
+func generateConfigInteractive(ctx context.Context, state SystemState, isDryRun bool, getIPInfo func(net.Interface) ([]string, map[string]string), getFQDN func(string, *net.Interface) string, discoverHA func(context.Context) ([]homeassistant.ServiceInstance, error)) (*config.Config, error) {
 	if err := stepConfirmOverwrite(ctx, state.IsReinstall, isDryRun); err != nil {
 		return nil, err
 	}
 
 	// Start background tasks
-	haChan := startHADiscovery(ctx)
-	fqdnChan := startFQDNResolution(ctx, state.Hostname)
+	haChan := startHADiscovery(ctx, discoverHA)
+	fqdnChan := startFQDNResolution(ctx, state.Hostname, getFQDN)
 
 	// 1. Installation Mode
 	mode, err := stepSelectInstallationMode(ctx, state.GrubConfigPath)
@@ -48,13 +47,13 @@ func generateConfigInteractive(ctx context.Context, state SystemState, isDryRun 
 	reportsBoot, runsDaemon := GetModeFlags(mode)
 
 	// 2. Network Interface
-	selectedIface, err := stepSelectNetworkInterface(ctx, state.Interfaces)
+	selectedIface, err := stepSelectNetworkInterface(ctx, state.Interfaces, getIPInfo)
 	if err != nil {
 		return nil, err
 	}
 
 	// 3. Host Address
-	hostAddress, err := stepSelectHostAddress(ctx, state.Hostname, selectedIface, fqdnChan)
+	hostAddress, err := stepSelectHostAddress(ctx, state.Hostname, selectedIface, fqdnChan, getIPInfo, getFQDN)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +65,7 @@ func generateConfigInteractive(ctx context.Context, state SystemState, isDryRun 
 	}
 
 	// 5. WOL Address
-	wolBroadcastAddress, err := stepSelectWOLAddress(ctx, selectedIface)
+	wolBroadcastAddress, err := stepSelectWOLAddress(ctx, selectedIface, getIPInfo)
 	if err != nil {
 		return nil, err
 	}
@@ -113,11 +112,11 @@ type haDiscoveryResult struct {
 	err       error
 }
 
-func startHADiscovery(ctx context.Context) <-chan haDiscoveryResult {
+func startHADiscovery(ctx context.Context, discoverHA func(context.Context) ([]homeassistant.ServiceInstance, error)) <-chan haDiscoveryResult {
 	haChan := make(chan haDiscoveryResult, 1)
 	go func() {
 		slog.Debug("Starting background Home Assistant discovery")
-		instances, err := homeassistant.DiscoverFunc(ctx)
+		instances, err := discoverHA(ctx)
 		if err != nil {
 			slog.Debug("Background HA discovery failed", "error", err)
 		} else {
@@ -132,11 +131,11 @@ type fqdnResolutionResult struct {
 	fqdn string
 }
 
-func startFQDNResolution(ctx context.Context, hostname string) <-chan fqdnResolutionResult {
+func startFQDNResolution(ctx context.Context, hostname string, getFQDN func(string, *net.Interface) string) <-chan fqdnResolutionResult {
 	globalInfoChan := make(chan fqdnResolutionResult, 1)
 	go func() {
 		slog.Debug("Starting background global FQDN resolution", "hostname", hostname)
-		fqdn := host.GetFQDN(hostname, nil)
+		fqdn := getFQDN(hostname, nil)
 		slog.Debug("Background global FQDN resolution complete", "fqdn", fqdn)
 		globalInfoChan <- fqdnResolutionResult{fqdn}
 	}()
@@ -155,10 +154,10 @@ func stepSelectInstallationMode(ctx context.Context, grubConfigPath string) (str
 	return mode, nil
 }
 
-func stepSelectNetworkInterface(ctx context.Context, interfaces []net.Interface) (net.Interface, error) {
+func stepSelectNetworkInterface(ctx context.Context, interfaces []net.Interface, getIPInfo func(net.Interface) ([]string, map[string]string)) (net.Interface, error) {
 	ifaceIdx := tap.Select(ctx, tap.SelectOptions[int]{
 		Message: "Available Network Interface",
-		Options: BuildIfaceOptions(interfaces, host.GetIPInfo),
+		Options: BuildIfaceOptions(interfaces, getIPInfo),
 	})
 	if ctx.Err() != nil {
 		return net.Interface{}, ctx.Err()
@@ -168,11 +167,11 @@ func stepSelectNetworkInterface(ctx context.Context, interfaces []net.Interface)
 	return selectedIface, nil
 }
 
-func stepSelectHostAddress(ctx context.Context, hostname string, iface net.Interface, fqdnChan <-chan fqdnResolutionResult) (string, error) {
-	ips, _ := host.GetIPInfo(iface)
+func stepSelectHostAddress(ctx context.Context, hostname string, iface net.Interface, fqdnChan <-chan fqdnResolutionResult, getIPInfo func(net.Interface) ([]string, map[string]string), getFQDN func(string, *net.Interface) string) (string, error) {
+	ips, _ := getIPInfo(iface)
 
 	// Local FQDN resolution (fast)
-	localFQDN := host.GetFQDN(hostname, &iface)
+	localFQDN := getFQDN(hostname, &iface)
 	slog.Debug("Local FQDN resolution result", "fqdn", localFQDN)
 
 	// Global FQDN resolution (wait if needed)
@@ -229,8 +228,8 @@ func stepSelectDaemonPort(ctx context.Context, state SystemState, runsDaemon boo
 	return port, nil
 }
 
-func stepSelectWOLAddress(ctx context.Context, iface net.Interface) (string, error) {
-	ips, broadcasts := host.GetIPInfo(iface)
+func stepSelectWOLAddress(ctx context.Context, iface net.Interface, getIPInfo func(net.Interface) ([]string, map[string]string)) (string, error) {
+	ips, broadcasts := getIPInfo(iface)
 	wolBroadcastAddress := tap.Select(ctx, tap.SelectOptions[string]{
 		Message: "WOL Broadcast Address (you may need to choose subnet broadcast for cross-VLAN setups)",
 		Options: BuildWolOptions(ips, broadcasts),

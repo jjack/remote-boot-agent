@@ -9,44 +9,44 @@ import (
 )
 
 var (
-	OsHostname     = os.Hostname
-	NetInterfaces  = net.Interfaces
-	NetLookupCNAME = net.LookupCNAME
-	GetAddrs       = func(iface net.Interface) ([]net.Addr, error) {
-		return iface.Addrs()
-	}
-	OsStat = os.Stat
-)
-
-var (
 	ErrListInterfaces       = errors.New("failed to list network interfaces")
 	ErrNoSuitableInterfaces = errors.New("no suitable interfaces found")
 	ErrDetectHostname       = errors.New("failed to detect hostname")
 )
 
-// isWOLCapableInterface checks if the given network interface is suitable for WOL (has a MAC address, is up, is not loopback, and is not virtual).
-func isWOLCapableInterface(inf net.Interface) bool {
-	if len(inf.HardwareAddr) == 0 {
-		slog.Debug("Interface has no MAC address (skipping)", "name", inf.Name)
-		return false
-	}
+// Host handles system information discovery.
+type Host struct {
+	OsHostname     func() (string, error)
+	NetInterfaces  func() ([]net.Interface, error)
+	NetLookupCNAME func(name string) (string, error)
+	GetAddrs       func(iface net.Interface) ([]net.Addr, error)
+	OsStat         func(name string) (os.FileInfo, error)
+}
 
-	if inf.Flags&net.FlagUp == 0 {
-		slog.Debug("Interface is not up (skipping)", "name", inf.Name)
-		return false
+func New() *Host {
+	return &Host{
+		OsHostname:     os.Hostname,
+		NetInterfaces:  net.Interfaces,
+		NetLookupCNAME: net.LookupCNAME,
+		GetAddrs: func(iface net.Interface) ([]net.Addr, error) {
+			return iface.Addrs()
+		},
+		OsStat: os.Stat,
 	}
+}
 
-	if inf.Flags&net.FlagLoopback != 0 {
-		slog.Debug("Interface is loopback (skipping)", "name", inf.Name)
-		return false
+// DetectHostname returns the system hostname.
+func (h *Host) DetectHostname() (string, error) {
+	hostname, err := h.OsHostname()
+	if err != nil {
+		return "", fmt.Errorf("%w: %w", ErrDetectHostname, err)
 	}
-
-	return isPhysicalInterface(inf)
+	return hostname, nil
 }
 
 // GetWOLInterfaces returns a slice of net.Interface that are capable of Wake-on-LAN.
-var GetWOLInterfaces = func() ([]net.Interface, error) {
-	interfaces, err := NetInterfaces()
+func (h *Host) GetWOLInterfaces() ([]net.Interface, error) {
+	interfaces, err := h.NetInterfaces()
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrListInterfaces, err)
 	}
@@ -54,7 +54,7 @@ var GetWOLInterfaces = func() ([]net.Interface, error) {
 	var wolIfaces []net.Interface
 	for _, inf := range interfaces {
 		slog.Debug("Checking to see if interface is suitable for WOL", "name", inf.Name)
-		if isWOLCapableInterface(inf) {
+		if h.isWOLCapableInterface(inf) {
 			slog.Debug("Interface is suitable for WOL", "name", inf.Name)
 			wolIfaces = append(wolIfaces, inf)
 		}
@@ -65,6 +65,33 @@ var GetWOLInterfaces = func() ([]net.Interface, error) {
 	}
 
 	return wolIfaces, nil
+}
+
+// GetIPInfo returns a list of IPv4 addresses and a map of those addresses to their computed broadcast address.
+func (h *Host) GetIPInfo(inf net.Interface) ([]string, map[string]string) {
+	var ips []string
+	broadcasts := make(map[string]string)
+
+	addrs, err := h.GetAddrs(inf)
+	if err != nil {
+		return ips, broadcasts
+	}
+
+	for _, addr := range addrs {
+		if ipnet, ok := addr.(*net.IPNet); ok {
+			ipv4 := ipnet.IP.To4()
+			if ipv4 == nil {
+				continue // Skip IPv6
+			}
+
+			ips = append(ips, ipv4.String())
+
+			if broadcast := getLastIP(ipnet); broadcast != nil {
+				broadcasts[ipv4.String()] = broadcast.String()
+			}
+		}
+	}
+	return ips, broadcasts
 }
 
 func getLastIP(ipnet *net.IPNet) net.IP {
@@ -91,37 +118,22 @@ func getLastIP(ipnet *net.IPNet) net.IP {
 	return last
 }
 
-// GetIPInfo returns a list of IPv4 addresses and a map of those addresses to their computed broadcast address.
-var GetIPInfo = func(inf net.Interface) ([]string, map[string]string) {
-	var ips []string
-	broadcasts := make(map[string]string)
-
-	addrs, err := GetAddrs(inf)
-	if err != nil {
-		return ips, broadcasts
+// isWOLCapableInterface checks if the given network interface is suitable for WOL (has a MAC address, is up, is not loopback, and is not virtual).
+func (h *Host) isWOLCapableInterface(inf net.Interface) bool {
+	if len(inf.HardwareAddr) == 0 {
+		slog.Debug("Interface has no MAC address (skipping)", "name", inf.Name)
+		return false
 	}
 
-	for _, addr := range addrs {
-		if ipnet, ok := addr.(*net.IPNet); ok {
-			ipv4 := ipnet.IP.To4()
-			if ipv4 == nil {
-				continue // Skip IPv6
-			}
-
-			ips = append(ips, ipv4.String())
-
-			if broadcast := getLastIP(ipnet); broadcast != nil {
-				broadcasts[ipv4.String()] = broadcast.String()
-			}
-		}
+	if inf.Flags&net.FlagUp == 0 {
+		slog.Debug("Interface is not up (skipping)", "name", inf.Name)
+		return false
 	}
-	return ips, broadcasts
-}
 
-var DetectHostname = func() (string, error) {
-	hostname, err := OsHostname()
-	if err != nil {
-		return "", fmt.Errorf("%w: %w", ErrDetectHostname, err)
+	if inf.Flags&net.FlagLoopback != 0 {
+		slog.Debug("Interface is loopback (skipping)", "name", inf.Name)
+		return false
 	}
-	return hostname, nil
+
+	return h.isPhysicalInterface(inf)
 }
