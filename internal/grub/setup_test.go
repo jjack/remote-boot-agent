@@ -48,24 +48,18 @@ func TestGrub_Setup_Success(t *testing.T) {
 	tempDir := t.TempDir()
 	fakeScriptPath := filepath.Join(tempDir, "99_ha_grub_os_reporter")
 
-	defer func(oldPath string, oldLook func(string) (string, error), oldCmd func(context.Context, string, ...string) *exec.Cmd) {
-		HassGrubStationPath = oldPath
-		ExecLookPath = oldLook
-		ExecCommand = oldCmd
-	}(HassGrubStationPath, ExecLookPath, ExecCommand)
-
-	HassGrubStationPath = fakeScriptPath
-	ExecCommand = fakeExecCommandSuccess
+	g := NewGrub()
+	g.HassGrubStationPath = fakeScriptPath
+	g.Command = fakeExecCommandSuccess
 
 	// Test success using update-grub
-	ExecLookPath = func(file string) (string, error) {
+	g.LookPath = func(file string) (string, error) {
 		if file == "update-grub" {
 			return "/fake/update-grub", nil
 		}
 		return "", errors.New("not found")
 	}
 
-	g := &Grub{}
 	err := g.Setup(context.Background(), SetupOptions{
 		TargetMAC:       "aa:bb:cc:dd:ee:ff",
 		TargetURL:       "http://hass.local:8123",
@@ -82,7 +76,7 @@ func TestGrub_Setup_Success(t *testing.T) {
 	}
 
 	// Test fallback success using grub2-mkconfig
-	ExecLookPath = func(file string) (string, error) {
+	g.LookPath = func(file string) (string, error) {
 		if file == "grub2-mkconfig" {
 			return "/fake/grub2-mkconfig", nil
 		}
@@ -102,13 +96,7 @@ func TestGrub_Setup_Success(t *testing.T) {
 
 func TestGrub_Setup_Errors(t *testing.T) {
 	ctx := context.Background()
-	g := &Grub{}
-
-	defer func(oldPath string, oldLook func(string) (string, error), oldCmd func(context.Context, string, ...string) *exec.Cmd) {
-		HassGrubStationPath = oldPath
-		ExecLookPath = oldLook
-		ExecCommand = oldCmd
-	}(HassGrubStationPath, ExecLookPath, ExecCommand)
+	g := NewGrub()
 
 	// 1. Invalid URL
 	err := g.Setup(ctx, SetupOptions{TargetMAC: "mac", TargetURL: "://bad-url", AuthToken: "test_webhook", WaitTimeSeconds: 2})
@@ -117,7 +105,7 @@ func TestGrub_Setup_Errors(t *testing.T) {
 	}
 
 	// 2. File creation failure
-	HassGrubStationPath = "/this/path/does/not/exist/99_script"
+	g.HassGrubStationPath = "/this/path/does/not/exist/99_script"
 	err = g.Setup(ctx, SetupOptions{TargetMAC: "mac", TargetURL: "http://hass.local", AuthToken: "test_webhook", WaitTimeSeconds: 2})
 	if err == nil || !strings.Contains(err.Error(), "failed to create grub script") {
 		t.Fatalf("expected file creation error, got %v", err)
@@ -125,10 +113,10 @@ func TestGrub_Setup_Errors(t *testing.T) {
 
 	// Fix path for subsequent tests
 	tempDir := t.TempDir()
-	HassGrubStationPath = filepath.Join(tempDir, "99_ha_grub_os_reporter")
+	g.HassGrubStationPath = filepath.Join(tempDir, "99_ha_grub_os_reporter")
 
 	// 3. No binary found in PATH
-	ExecLookPath = func(file string) (string, error) {
+	g.LookPath = func(file string) (string, error) {
 		return "", errors.New("not found")
 	}
 	err = g.Setup(ctx, SetupOptions{TargetMAC: "mac", TargetURL: "http://hass.local", AuthToken: "test_webhook", WaitTimeSeconds: 2})
@@ -137,20 +125,20 @@ func TestGrub_Setup_Errors(t *testing.T) {
 	}
 
 	// 4. update-grub command execution fails
-	ExecLookPath = func(file string) (string, error) {
+	g.LookPath = func(file string) (string, error) {
 		if file == "update-grub" {
 			return "/fake/update-grub", nil
 		}
 		return "", errors.New("not found")
 	}
-	ExecCommand = fakeExecCommandFail
+	g.Command = fakeExecCommandFail
 	err = g.Setup(ctx, SetupOptions{TargetMAC: "mac", TargetURL: "http://hass.local", AuthToken: "test_webhook", WaitTimeSeconds: 2})
 	if err == nil || !strings.Contains(err.Error(), "update-grub failed") {
 		t.Fatalf("expected update-grub execution error, got %v", err)
 	}
 
 	// 5. grub2-mkconfig command execution fails
-	ExecLookPath = func(file string) (string, error) {
+	g.LookPath = func(file string) (string, error) {
 		if file == "grub2-mkconfig" {
 			return "/fake/grub2-mkconfig", nil
 		}
@@ -207,58 +195,42 @@ func TestGenerateWaitList(t *testing.T) {
 
 func TestGrub_Uninstall(t *testing.T) {
 	tempDir := t.TempDir()
-	oldPath := HassGrubStationPath
-	oldExecLookPath := ExecLookPath
-	oldExecCommand := ExecCommand
-	defer func() {
-		HassGrubStationPath = oldPath
-		ExecLookPath = oldExecLookPath
-		ExecCommand = oldExecCommand
-	}()
 
-	HassGrubStationPath = tempDir + "/99_grubstation"
+	g := NewGrub()
+	g.HassGrubStationPath = tempDir + "/99_grubstation"
 
 	// Pre-create file
-	_ = os.WriteFile(HassGrubStationPath, []byte(""), 0o755)
+	_ = os.WriteFile(g.HassGrubStationPath, []byte(""), 0o755)
 
-	ExecLookPath = func(file string) (string, error) {
+	g.LookPath = func(file string) (string, error) {
 		if file == "update-grub" {
 			return "/bin/true", nil
 		}
 		return "", errors.New("not found")
 	}
-	ExecCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+	g.Command = func(ctx context.Context, name string, args ...string) *exec.Cmd {
 		return exec.Command("true")
 	}
 
-	g := &Grub{}
 	err := g.Uninstall(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if _, err := os.Stat(HassGrubStationPath); !os.IsNotExist(err) {
+	if _, err := os.Stat(g.HassGrubStationPath); !os.IsNotExist(err) {
 		t.Error("expected grub script to be removed")
 	}
 }
 
 func TestGrub_Uninstall_NoFile(t *testing.T) {
 	tempDir := t.TempDir()
-	oldPath := HassGrubStationPath
-	oldLook := ExecLookPath
-	oldCmd := ExecCommand
-	defer func() {
-		HassGrubStationPath = oldPath
-		ExecLookPath = oldLook
-		ExecCommand = oldCmd
-	}()
 
-	HassGrubStationPath = tempDir + "/non-existent"
-	ExecLookPath = func(file string) (string, error) {
+	g := NewGrub()
+	g.HassGrubStationPath = tempDir + "/non-existent"
+	g.LookPath = func(file string) (string, error) {
 		return "", errors.New("not found")
 	}
 
-	g := &Grub{}
 	err := g.Uninstall(context.Background())
 	if err != nil {
 		t.Fatalf("expected no error when file is already gone, got %v", err)
@@ -268,15 +240,11 @@ func TestGrub_Uninstall_NoFile(t *testing.T) {
 func TestGrub_Uninstall_RemoveError(t *testing.T) {
 	// Use a non-empty directory to cause remove error
 	tempDir := t.TempDir()
-	oldPath := HassGrubStationPath
-	defer func() {
-		HassGrubStationPath = oldPath
-	}()
 
-	HassGrubStationPath = tempDir
+	g := NewGrub()
+	g.HassGrubStationPath = tempDir
 	_ = os.WriteFile(filepath.Join(tempDir, "keep"), []byte(""), 0o644)
 
-	g := &Grub{}
 	err := g.Uninstall(context.Background())
 	if err == nil {
 		t.Fatal("expected error when removing a non-empty directory, got nil")
@@ -285,28 +253,20 @@ func TestGrub_Uninstall_RemoveError(t *testing.T) {
 
 func TestGrub_Uninstall_Grub2Mkconfig(t *testing.T) {
 	tempDir := t.TempDir()
-	oldPath := HassGrubStationPath
-	oldExecLookPath := ExecLookPath
-	oldExecCommand := ExecCommand
-	defer func() {
-		HassGrubStationPath = oldPath
-		ExecLookPath = oldExecLookPath
-		ExecCommand = oldExecCommand
-	}()
 
-	HassGrubStationPath = tempDir + "/99_grubstation"
+	g := NewGrub()
+	g.HassGrubStationPath = tempDir + "/99_grubstation"
 
-	ExecLookPath = func(file string) (string, error) {
+	g.LookPath = func(file string) (string, error) {
 		if file == "grub2-mkconfig" {
 			return "/bin/true", nil
 		}
 		return "", errors.New("not found")
 	}
-	ExecCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+	g.Command = func(ctx context.Context, name string, args ...string) *exec.Cmd {
 		return exec.Command("true")
 	}
 
-	g := &Grub{}
 	err := g.Uninstall(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -317,27 +277,18 @@ func TestGrub_Uninstall_UpdateGrubError(t *testing.T) {
 	tempDir := t.TempDir()
 	fakeScriptPath := filepath.Join(tempDir, "99_grubstation")
 
-	oldPath := HassGrubStationPath
-	oldExecLookPath := ExecLookPath
-	oldExecCommand := ExecCommand
-	defer func() {
-		HassGrubStationPath = oldPath
-		ExecLookPath = oldExecLookPath
-		ExecCommand = oldExecCommand
-	}()
-
-	HassGrubStationPath = fakeScriptPath
-	ExecLookPath = func(file string) (string, error) {
+	g := NewGrub()
+	g.HassGrubStationPath = fakeScriptPath
+	g.LookPath = func(file string) (string, error) {
 		if file == "update-grub" {
 			return "/bin/false", nil
 		}
 		return "", errors.New("not found")
 	}
-	ExecCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+	g.Command = func(ctx context.Context, name string, args ...string) *exec.Cmd {
 		return exec.Command("false")
 	}
 
-	g := &Grub{}
 	err := g.Uninstall(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "update-grub failed") {
 		t.Errorf("expected update-grub failure, got %v", err)
@@ -348,13 +299,9 @@ func TestGrub_CheckDrift(t *testing.T) {
 	tempDir := t.TempDir()
 	fakeScriptPath := filepath.Join(tempDir, "99_grubstation")
 
-	defer func(oldPath string) {
-		HassGrubStationPath = oldPath
-	}(HassGrubStationPath)
+	g := NewGrub()
+	g.HassGrubStationPath = fakeScriptPath
 
-	HassGrubStationPath = fakeScriptPath
-
-	g := &Grub{}
 	opts := SetupOptions{
 		TargetMAC:       "aa:bb:cc:dd:ee:ff",
 		TargetURL:       "http://hass.local:8123",
@@ -400,11 +347,11 @@ func TestGrub_CheckDrift(t *testing.T) {
 	}
 
 	// 4. Read error (other than NotExist)
-	HassGrubStationPath = filepath.Join(tempDir, "cannot_read_dir")
-	if err := os.Mkdir(HassGrubStationPath, 0o000); err != nil {
+	g.HassGrubStationPath = filepath.Join(tempDir, "cannot_read_dir")
+	if err := os.Mkdir(g.HassGrubStationPath, 0o000); err != nil {
 		t.Fatalf("failed to create unreadable directory: %v", err)
 	}
-	defer func() { _ = os.Chmod(HassGrubStationPath, 0o755) }() // Clean up
+	defer func() { _ = os.Chmod(g.HassGrubStationPath, 0o755) }() // Clean up
 
 	_, err = g.CheckDrift(opts)
 	if err == nil {

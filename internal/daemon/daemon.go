@@ -8,18 +8,12 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os/exec"
 	"time"
-)
-
-var (
-	execCommand = exec.Command
-	randRead    = rand.Read
 )
 
 func generateToken() (string, error) {
 	b := make([]byte, 32)
-	if _, err := randRead(b); err != nil {
+	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
@@ -47,6 +41,7 @@ type Daemon struct {
 	Metadata        Metadata
 	RegisterHandler func(ctx context.Context, token string) error
 	UpdateHandler   func(ctx context.Context) error
+	ShutdownHandler func() error
 }
 
 func New(cfg Config, meta Metadata, regHandler func(ctx context.Context, token string) error, updateHandler func(ctx context.Context) error) *Daemon {
@@ -55,10 +50,13 @@ func New(cfg Config, meta Metadata, regHandler func(ctx context.Context, token s
 		Metadata:        meta,
 		RegisterHandler: regHandler,
 		UpdateHandler:   updateHandler,
+		ShutdownHandler: func() error {
+			return getShutdownCommand().Run()
+		},
 	}
 }
 
-// runShared contains the core daemon logic.
+// run contains the core daemon logic.
 func (d *Daemon) run(ctx context.Context) error {
 	token := d.Config.APIKey
 	if token == "" {
@@ -205,10 +203,8 @@ func (d *Daemon) run(ctx context.Context) error {
 }
 
 func (d *Daemon) performOSShutdown() error {
-	cmd := getShutdownCommand()
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to execute shutdown command: %w", err)
+	if d.ShutdownHandler != nil {
+		return d.ShutdownHandler()
 	}
 	return nil
 }

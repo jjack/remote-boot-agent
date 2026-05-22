@@ -37,7 +37,7 @@ func NewCLI() *CLI {
 
 	deps := &CommandDeps{
 		Config:   &config.Config{},
-		Grub:     &grub.Grub{},
+		Grub:     grub.NewGrub(),
 		Registry: servicemanager.NewRegistry(),
 	}
 

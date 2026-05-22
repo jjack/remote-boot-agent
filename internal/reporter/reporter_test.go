@@ -133,7 +133,7 @@ menuentry 'Windows' {
 		},
 	}
 
-	g := &grub.Grub{ConfigPath: grubCfgPath}
+	g := func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = grubCfgPath; return g }()
 	r := New(cfg, g, "test-manager")
 
 	// 4. Execute
@@ -196,7 +196,7 @@ func TestReporter_PushBootOptions_GrubError(t *testing.T) {
 		},
 	}
 	// Use an invalid path to trigger GetBootOptions error
-	g := &grub.Grub{ConfigPath: "/non/existent/path/grub.cfg"}
+	g := func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = "/non/existent/path/grub.cfg"; return g }()
 	r := New(cfg, g, "test-manager")
 
 	err := r.PushBootOptions(context.Background())

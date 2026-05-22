@@ -14,7 +14,7 @@ func TestNewServeCmd_Execute(t *testing.T) {
 	cfg := &config.Config{
 		Daemon: config.DaemonConfig{Port: 0, ReportBootOptions: false},
 	}
-	deps := &CommandDeps{Config: cfg, Grub: &grub.Grub{}, Registry: servicemanager.NewRegistry()}
+	deps := &CommandDeps{Config: cfg, Grub: grub.NewGrub(), Registry: servicemanager.NewRegistry()}
 	cmd := NewServeCmd(deps)
 	cmd.SetOut(&bytes.Buffer{})
 
@@ -29,19 +29,17 @@ func TestNewServeCmd_Execute(t *testing.T) {
 }
 
 func TestNewServeCmd_DriftDetected(t *testing.T) {
-	oldHassPath := grub.HassGrubStationPath
-	defer func() { grub.HassGrubStationPath = oldHassPath }()
-
-	// Point HassGrubStationPath to a non-existent file to trigger drift (CheckDrift returns true if file missing)
-	grub.HassGrubStationPath = "/tmp/non-existent-grubstation-script"
-
 	cfg := &config.Config{
 		Daemon: config.DaemonConfig{Port: 0, ReportBootOptions: true},
 		HomeAssistant: config.HomeAssistantConfig{
 			URL: "http://ha.local:8123",
 		},
 	}
-	deps := &CommandDeps{Config: cfg, Grub: &grub.Grub{}, Registry: servicemanager.NewRegistry()}
+	deps := &CommandDeps{Config: cfg, Grub: grub.NewGrub(), Registry: servicemanager.NewRegistry()}
+
+	// Point HassGrubStationPath to a non-existent file to trigger drift (CheckDrift returns true if file missing)
+	deps.Grub.HassGrubStationPath = "/tmp/non-existent-grubstation-script"
+
 	cmd := NewServeCmd(deps)
 	cmd.SetOut(&bytes.Buffer{})
 
@@ -61,7 +59,7 @@ func TestNewServeCmd_DriftError(t *testing.T) {
 			URL: "invalid-url", // This will cause CheckDrift to return an error
 		},
 	}
-	deps := &CommandDeps{Config: cfg, Grub: &grub.Grub{}, Registry: servicemanager.NewRegistry()}
+	deps := &CommandDeps{Config: cfg, Grub: grub.NewGrub(), Registry: servicemanager.NewRegistry()}
 	cmd := NewServeCmd(deps)
 	cmd.SetOut(&bytes.Buffer{})
 
@@ -82,7 +80,7 @@ func TestNewServeCmd_ExplicitGrubConfig(t *testing.T) {
 			URL:             "http://grub.local",
 		},
 	}
-	deps := &CommandDeps{Config: cfg, Grub: &grub.Grub{}, Registry: servicemanager.NewRegistry()}
+	deps := &CommandDeps{Config: cfg, Grub: grub.NewGrub(), Registry: servicemanager.NewRegistry()}
 	cmd := NewServeCmd(deps)
 	cmd.SetOut(&bytes.Buffer{})
 
@@ -116,7 +114,7 @@ func TestNewServeCmd_WithServiceManager(t *testing.T) {
 	cfg := &config.Config{
 		Daemon: config.DaemonConfig{Port: 0},
 	}
-	deps := &CommandDeps{Config: cfg, Grub: &grub.Grub{}, Registry: reg}
+	deps := &CommandDeps{Config: cfg, Grub: grub.NewGrub(), Registry: reg}
 	cmd := NewServeCmd(deps)
 	cmd.SetOut(&bytes.Buffer{})
 

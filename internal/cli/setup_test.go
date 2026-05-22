@@ -82,7 +82,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 
 				tempGrub := t.TempDir() + "/grub.cfg"
 				_ = os.WriteFile(tempGrub, []byte(""), 0o644)
-				deps.Grub = &grub.Grub{ConfigPath: tempGrub}
+				deps.Grub = func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = tempGrub; return g }()
 				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int, isDryRun bool) (*config.Config, error) {
 					return &config.Config{
 						HomeAssistant: config.HomeAssistantConfig{URL: ts.URL, WebhookID: "fake"},
@@ -100,7 +100,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) {
 				tempGrub := t.TempDir() + "/grub.cfg"
 				_ = os.WriteFile(tempGrub, []byte(""), 0o644)
-				deps.Grub = &grub.Grub{ConfigPath: tempGrub}
+				deps.Grub = func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = tempGrub; return g }()
 				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int, isDryRun bool) (*config.Config, error) {
 					return &config.Config{}, nil
 				}
@@ -116,7 +116,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) {
 				tempGrub := t.TempDir() + "/grub.cfg"
 				_ = os.WriteFile(tempGrub, []byte(""), 0o644)
-				deps.Grub = &grub.Grub{ConfigPath: tempGrub}
+				deps.Grub = func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = tempGrub; return g }()
 				deps.Registry = servicemanager.NewRegistry() // Empty registry causes init system error
 			},
 			wantErr:     "no supported service manager detected",
@@ -127,7 +127,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) {
 				tempGrub := t.TempDir() + "/grub.cfg"
 				_ = os.WriteFile(tempGrub, []byte(""), 0o644)
-				deps.Grub = &grub.Grub{ConfigPath: tempGrub}
+				deps.Grub = func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = tempGrub; return g }()
 				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int, isDryRun bool) (*config.Config, error) {
 					return nil, errors.New("survey failed")
 				}
@@ -148,7 +148,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) {
 				tempGrub := t.TempDir() + "/grub.cfg"
 				_ = os.WriteFile(tempGrub, []byte(""), 0o644)
-				deps.Grub = &grub.Grub{ConfigPath: tempGrub}
+				deps.Grub = func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = tempGrub; return g }()
 				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int, isDryRun bool) (*config.Config, error) {
 					return &config.Config{}, nil
 				}
@@ -163,7 +163,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) {
 				tempGrub := t.TempDir() + "/grub.cfg"
 				_ = os.WriteFile(tempGrub, []byte(""), 0o644)
-				deps.Grub = &grub.Grub{ConfigPath: tempGrub}
+				deps.Grub = func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = tempGrub; return g }()
 				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int, isDryRun bool) (*config.Config, error) {
 					return &config.Config{}, nil
 				}
@@ -181,7 +181,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) {
 				tempGrub := t.TempDir() + "/grub.cfg"
 				_ = os.WriteFile(tempGrub, []byte(""), 0o644)
-				deps.Grub = &grub.Grub{ConfigPath: tempGrub} // will fail since not mocked correctly
+				deps.Grub = func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = tempGrub; return g }() // will fail since not mocked correctly
 				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int, isDryRun bool) (*config.Config, error) {
 					return &config.Config{
 						Daemon: config.DaemonConfig{ReportBootOptions: true},
@@ -195,19 +195,11 @@ func TestSetupCmd_Execute(t *testing.T) {
 			name: "Success Install, Push Succeeds",
 			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) {
 				// Mock successful grub setup
-				oldExecLookPath := grub.ExecLookPath
-				oldExecCommand := grub.ExecCommand
-				oldHassPath := grub.HassGrubStationPath
-				grub.ExecLookPath = func(file string) (string, error) { return "/bin/true", nil }
-				grub.ExecCommand = func(ctx context.Context, command string, args ...string) *exec.Cmd {
+				deps.Grub.LookPath = func(file string) (string, error) { return "/bin/true", nil }
+				deps.Grub.Command = func(ctx context.Context, command string, args ...string) *exec.Cmd {
 					return exec.CommandContext(ctx, "/bin/true")
 				}
-				grub.HassGrubStationPath = t.TempDir() + "/99_ha_grub_os_reporter"
-				t.Cleanup(func() {
-					grub.ExecLookPath = oldExecLookPath
-					grub.ExecCommand = oldExecCommand
-					grub.HassGrubStationPath = oldHassPath
-				})
+				deps.Grub.HassGrubStationPath = t.TempDir() + "/99_ha_grub_os_reporter"
 
 				// Mock successful GetBootOptions and a working HA endpoint
 				ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -218,7 +210,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 
 				tempGrub := t.TempDir() + "/grub.cfg"
 				_ = os.WriteFile(tempGrub, []byte("menuentry 'OS' {}"), 0o644)
-				deps.Grub = &grub.Grub{ConfigPath: tempGrub}
+				deps.Grub = func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = tempGrub; return g }()
 
 				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int, isDryRun bool) (*config.Config, error) {
 					return &config.Config{
@@ -237,22 +229,14 @@ func TestSetupCmd_Execute(t *testing.T) {
 			name: "Success Install, Push Fails",
 			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) {
 				// Mock successful grub setup
-				oldExecLookPath := grub.ExecLookPath
-				oldExecCommand := grub.ExecCommand
-				oldHassPath := grub.HassGrubStationPath
-				grub.ExecLookPath = func(file string) (string, error) { return "/bin/true", nil }
-				grub.ExecCommand = func(ctx context.Context, command string, args ...string) *exec.Cmd {
+				deps.Grub.LookPath = func(file string) (string, error) { return "/bin/true", nil }
+				deps.Grub.Command = func(ctx context.Context, command string, args ...string) *exec.Cmd {
 					return exec.CommandContext(ctx, "/bin/true")
 				}
-				grub.HassGrubStationPath = t.TempDir() + "/99_ha_grub_os_reporter"
-				t.Cleanup(func() {
-					grub.ExecLookPath = oldExecLookPath
-					grub.ExecCommand = oldExecCommand
-					grub.HassGrubStationPath = oldHassPath
-				})
+				deps.Grub.HassGrubStationPath = t.TempDir() + "/99_ha_grub_os_reporter"
 
 				// Make GetBootOptions fail to trigger error in PushBootOptions
-				deps.Grub = &grub.Grub{ConfigPath: "/non/existent/path"}
+				deps.Grub = func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = "/non/existent/path"; return g }()
 
 				wizard.RunGenerateSurvey = func(ctx context.Context, deps wizard.SurveyDeps, isReinstall bool, currentPort int, isDryRun bool) (*config.Config, error) {
 					return &config.Config{
@@ -304,7 +288,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 
 			deps := &CommandDeps{
 				Config:   &config.Config{},
-				Grub:     &grub.Grub{},
+				Grub:     grub.NewGrub(),
 				Registry: initReg,
 			}
 
@@ -400,7 +384,7 @@ func TestEnsureSupport_GenericErrors(t *testing.T) {
 		initReg.Register("systemd", func() servicemanager.Manager { return &mockSurveyService{} })
 
 		deps := &CommandDeps{
-			Grub:     &grub.Grub{ConfigPath: t.TempDir() + "/grub.cfg"},
+			Grub:     func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = t.TempDir() + "/grub.cfg"; return g }(),
 			Registry: initReg,
 		}
 		cancel()
@@ -543,29 +527,21 @@ func TestPerformInstall_WithToken(t *testing.T) {
 	initReg := servicemanager.NewRegistry()
 	initReg.Register("mock-init", func() servicemanager.Manager { return &mockInstallInitSystem{} })
 
-	// Mock successful grub setup
-	oldExecLookPath := grub.ExecLookPath
-	oldExecCommand := grub.ExecCommand
-	oldHassPath := grub.HassGrubStationPath
-	grub.ExecLookPath = func(file string) (string, error) { return "/bin/true", nil }
-	grub.ExecCommand = func(ctx context.Context, command string, args ...string) *exec.Cmd {
-		return exec.CommandContext(ctx, "/bin/true")
-	}
-	grub.HassGrubStationPath = t.TempDir() + "/99_ha_grub_os_reporter"
-	defer func() {
-		grub.ExecLookPath = oldExecLookPath
-		grub.ExecCommand = oldExecCommand
-		grub.HassGrubStationPath = oldHassPath
-	}()
-
 	tempGrub := t.TempDir() + "/grub.cfg"
 	_ = os.WriteFile(tempGrub, []byte("menuentry 'OS' {}"), 0o644)
 
 	deps := &CommandDeps{
 		Config:   cfg,
-		Grub:     &grub.Grub{ConfigPath: tempGrub},
+		Grub:     func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = tempGrub; return g }(),
 		Registry: initReg,
 	}
+
+	// Mock successful grub setup
+	deps.Grub.LookPath = func(file string) (string, error) { return "/bin/true", nil }
+	deps.Grub.Command = func(ctx context.Context, command string, args ...string) *exec.Cmd {
+		return exec.CommandContext(ctx, "/bin/true")
+	}
+	deps.Grub.HassGrubStationPath = t.TempDir() + "/99_ha_grub_os_reporter"
 
 	// Suppress tap output
 	tap.SetTermIO(nil, tap.NewMockWritable())
@@ -587,7 +563,7 @@ func TestIsInstalled_Error(t *testing.T) {
 
 	deps := &CommandDeps{
 		Registry: initReg,
-		Grub:     &grub.Grub{ConfigPath: t.TempDir() + "/grub.cfg"},
+		Grub:     func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = t.TempDir() + "/grub.cfg"; return g }(),
 	}
 
 	_, err := IsInstalled(context.Background(), deps)

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"os/exec"
 	"strings"
 	"text/template"
 )
@@ -15,12 +14,6 @@ import (
 var (
 	ErrInvalidHAURL = errors.New("invalid home assistant url: scheme and host are required")
 	ErrNoGrubTool   = errors.New("neither update-grub nor grub2-mkconfig found in PATH")
-)
-
-var (
-	HassGrubStationPath = "/etc/grub.d/99_grubstation"
-	ExecLookPath        = exec.LookPath
-	ExecCommand         = exec.CommandContext
 )
 
 //go:embed templates/99_grubstation.tmpl
@@ -44,19 +37,19 @@ func (g *Grub) Setup(ctx context.Context, opts SetupOptions) error {
 		return err
 	}
 
-	if err := os.WriteFile(HassGrubStationPath, []byte(content), 0o755); err != nil {
+	if err := os.WriteFile(g.HassGrubStationPath, []byte(content), 0o755); err != nil {
 		return fmt.Errorf("failed to create grub script (are you running as root?): %w", err)
 	}
 
-	if path, err := ExecLookPath("update-grub"); err == nil {
-		out, err := ExecCommand(ctx, path).CombinedOutput()
+	if path, err := g.LookPath("update-grub"); err == nil {
+		out, err := g.Command(ctx, path).CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("update-grub failed: %s", string(out))
 		}
 		return nil
 	}
-	if path, err := ExecLookPath("grub2-mkconfig"); err == nil {
-		out, err := ExecCommand(ctx, path, "-o", "/boot/grub2/grub.cfg").CombinedOutput()
+	if path, err := g.LookPath("grub2-mkconfig"); err == nil {
+		out, err := g.Command(ctx, path, "-o", "/boot/grub2/grub.cfg").CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("grub2-mkconfig failed: %s", string(out))
 		}
@@ -72,7 +65,7 @@ func (g *Grub) CheckDrift(opts SetupOptions) (bool, error) {
 		return false, err
 	}
 
-	actual, err := os.ReadFile(HassGrubStationPath)
+	actual, err := os.ReadFile(g.HassGrubStationPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return true, nil // It doesn't exist, so it's definitely drifting (not installed)
@@ -126,19 +119,19 @@ func (g *Grub) SetupWarning() string {
 
 // Uninstall removes the GRUB remote boot agent script and updates the GRUB config.
 func (g *Grub) Uninstall(ctx context.Context) error {
-	if err := os.Remove(HassGrubStationPath); err != nil && !os.IsNotExist(err) {
+	if err := os.Remove(g.HassGrubStationPath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove grub script: %w", err)
 	}
 
-	if path, err := ExecLookPath("update-grub"); err == nil {
-		out, err := ExecCommand(ctx, path).CombinedOutput()
+	if path, err := g.LookPath("update-grub"); err == nil {
+		out, err := g.Command(ctx, path).CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("update-grub failed: %s", string(out))
 		}
 		return nil
 	}
-	if path, err := ExecLookPath("grub2-mkconfig"); err == nil {
-		out, err := ExecCommand(ctx, path, "-o", "/boot/grub2/grub.cfg").CombinedOutput()
+	if path, err := g.LookPath("grub2-mkconfig"); err == nil {
+		out, err := g.Command(ctx, path, "-o", "/boot/grub2/grub.cfg").CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("grub2-mkconfig failed: %s", string(out))
 		}

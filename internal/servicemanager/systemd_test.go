@@ -12,26 +12,15 @@ import (
 )
 
 func TestSystemd(t *testing.T) {
-	oldExe := osExecutable
-	oldWrite := osWriteFile
-	oldCmd := execCommand
-	oldDir := systemdDir
-	oldPath := systemdServicePath
-	defer func() {
-		osExecutable = oldExe
-		osWriteFile = oldWrite
-		execCommand = oldCmd
-		systemdDir = oldDir
-		systemdServicePath = oldPath
-	}()
-
-	s := NewSystemd()
+	s := NewSystemd().(*Systemd)
 
 	t.Run("Basic", func(t *testing.T) {
 		if s.Name() != "systemd" {
 			t.Errorf("expected systemd, got %s", s.Name())
 		}
 
+		oldDir := systemdDir
+		defer func() { systemdDir = oldDir }()
 		systemdDir = t.TempDir()
 		if !s.IsActive(context.Background()) {
 			t.Error("expected active when systemd directory exists")
@@ -39,9 +28,9 @@ func TestSystemd(t *testing.T) {
 	})
 
 	t.Run("Install_Success", func(t *testing.T) {
-		osExecutable = func() (string, error) { return "/app", nil }
-		osWriteFile = func(name string, data []byte, perm os.FileMode) error { return nil }
-		execCommand = func(ctx context.Context, name string, arg ...string) *exec.Cmd {
+		s.OsExecutable = func() (string, error) { return "/app", nil }
+		s.OsWriteFile = func(name string, data []byte, perm os.FileMode) error { return nil }
+		s.ExecCommand = func(ctx context.Context, name string, arg ...string) *exec.Cmd {
 			return exec.Command("true")
 		}
 
@@ -51,19 +40,19 @@ func TestSystemd(t *testing.T) {
 	})
 
 	t.Run("Install_Errors", func(t *testing.T) {
-		osExecutable = func() (string, error) { return "", errors.New("exe fail") }
+		s.OsExecutable = func() (string, error) { return "", errors.New("exe fail") }
 		if err := s.Install(context.Background(), "cfg"); err == nil {
 			t.Error("expected error on executable fail")
 		}
 
-		osExecutable = func() (string, error) { return "/app", nil }
-		osWriteFile = func(name string, data []byte, perm os.FileMode) error { return errors.New("write fail") }
+		s.OsExecutable = func() (string, error) { return "/app", nil }
+		s.OsWriteFile = func(name string, data []byte, perm os.FileMode) error { return errors.New("write fail") }
 		if err := s.Install(context.Background(), "cfg"); err == nil {
 			t.Error("expected error on write fail")
 		}
 
-		osWriteFile = func(name string, data []byte, perm os.FileMode) error { return nil }
-		execCommand = func(ctx context.Context, name string, arg ...string) *exec.Cmd {
+		s.OsWriteFile = func(name string, data []byte, perm os.FileMode) error { return nil }
+		s.ExecCommand = func(ctx context.Context, name string, arg ...string) *exec.Cmd {
 			return exec.Command("false") // CombinedOutput returns error on non-zero exit
 		}
 		if err := s.Install(context.Background(), "cfg"); err == nil {
@@ -72,14 +61,11 @@ func TestSystemd(t *testing.T) {
 	})
 
 	t.Run("Uninstall", func(t *testing.T) {
-		oldRemove := osRemove
-		defer func() { osRemove = oldRemove }()
+		s.ServicePath = t.TempDir() + "/svc"
+		_ = os.WriteFile(s.ServicePath, []byte(""), 0o644)
 
-		systemdServicePath = t.TempDir() + "/svc"
-		_ = os.WriteFile(systemdServicePath, []byte(""), 0o644)
-
-		osRemove = os.Remove
-		execCommand = func(ctx context.Context, name string, arg ...string) *exec.Cmd {
+		s.OsRemove = os.Remove
+		s.ExecCommand = func(ctx context.Context, name string, arg ...string) *exec.Cmd {
 			return exec.Command("true")
 		}
 
@@ -88,14 +74,14 @@ func TestSystemd(t *testing.T) {
 		}
 
 		// Remove fail
-		osRemove = func(name string) error { return errors.New("remove fail") }
+		s.OsRemove = func(name string) error { return errors.New("remove fail") }
 		if err := s.Uninstall(context.Background()); err == nil || !strings.Contains(err.Error(), "failed to remove systemd service file") {
 			t.Errorf("expected remove error, got %v", err)
 		}
-		osRemove = os.Remove
+		s.OsRemove = os.Remove
 
 		// Reload fail
-		execCommand = func(ctx context.Context, name string, arg ...string) *exec.Cmd {
+		s.ExecCommand = func(ctx context.Context, name string, arg ...string) *exec.Cmd {
 			if len(arg) > 0 && arg[0] == "daemon-reload" {
 				return exec.Command("false")
 			}
@@ -107,13 +93,13 @@ func TestSystemd(t *testing.T) {
 	})
 
 	t.Run("StartStop", func(t *testing.T) {
-		execCommand = func(ctx context.Context, name string, arg ...string) *exec.Cmd {
+		s.ExecCommand = func(ctx context.Context, name string, arg ...string) *exec.Cmd {
 			return exec.Command("true")
 		}
 		_ = s.Start(context.Background())
 		_ = s.Stop(context.Background())
 
-		execCommand = func(ctx context.Context, name string, arg ...string) *exec.Cmd {
+		s.ExecCommand = func(ctx context.Context, name string, arg ...string) *exec.Cmd {
 			return exec.Command("false")
 		}
 		if err := s.Start(context.Background()); err == nil {
@@ -134,15 +120,12 @@ func TestSystemd(t *testing.T) {
 }
 
 func TestSystemd_IsInstalled(t *testing.T) {
-	oldPath := systemdServicePath
-	defer func() { systemdServicePath = oldPath }()
-
-	s := &Systemd{}
+	s := NewSystemd().(*Systemd)
 
 	t.Run("Installed", func(t *testing.T) {
 		tmp := t.TempDir() + "/svc"
 		_ = os.WriteFile(tmp, []byte(""), 0o644)
-		systemdServicePath = tmp
+		s.ServicePath = tmp
 		installed, err := s.IsInstalled(context.Background())
 		if err != nil || !installed {
 			t.Errorf("expected installed=true, got %v, %v", installed, err)
@@ -150,7 +133,7 @@ func TestSystemd_IsInstalled(t *testing.T) {
 	})
 
 	t.Run("NotInstalled", func(t *testing.T) {
-		systemdServicePath = "/non/existent/path"
+		s.ServicePath = "/non/existent/path"
 		installed, err := s.IsInstalled(context.Background())
 		if err != nil || installed {
 			t.Errorf("expected installed=false, got %v, %v", installed, err)
@@ -159,20 +142,17 @@ func TestSystemd_IsInstalled(t *testing.T) {
 }
 
 func TestSystemd_CheckPermissions(t *testing.T) {
-	oldGetuid := osGetuid
-	defer func() { osGetuid = oldGetuid }()
-
-	s := &Systemd{}
+	s := NewSystemd().(*Systemd)
 
 	t.Run("Root", func(t *testing.T) {
-		osGetuid = func() int { return 0 }
+		s.OsGetuid = func() int { return 0 }
 		if err := s.CheckPermissions(context.Background()); err != nil {
 			t.Errorf("expected no error for root, got %v", err)
 		}
 	})
 
 	t.Run("NonRoot", func(t *testing.T) {
-		osGetuid = func() int { return 1000 }
+		s.OsGetuid = func() int { return 1000 }
 		if err := s.CheckPermissions(context.Background()); err == nil {
 			t.Error("expected error for non-root, got nil")
 		}
@@ -188,7 +168,7 @@ func TestSystemd_Install_AbsError(t *testing.T) {
 	_ = os.Chdir(temp)
 	_ = os.RemoveAll(temp)
 
-	s := &Systemd{}
+	s := NewSystemd().(*Systemd)
 	err := s.Install(context.Background(), "cfg.yaml")
 	if err == nil {
 		t.Error("expected error from filepath.Abs, got nil")

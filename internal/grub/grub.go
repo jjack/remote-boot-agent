@@ -5,11 +5,23 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 )
 
 // Grub represents the GRUB bootloader on this system.
 type Grub struct {
-	ConfigPath string
+	ConfigPath          string
+	HassGrubStationPath string
+	LookPath            func(file string) (string, error)
+	Command             func(ctx context.Context, name string, arg ...string) *exec.Cmd
+}
+
+func NewGrub() *Grub {
+	return &Grub{
+		HassGrubStationPath: "/etc/grub.d/99_grubstation",
+		LookPath:            exec.LookPath,
+		Command:             exec.CommandContext,
+	}
 }
 
 type SetupOptions struct {

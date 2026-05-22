@@ -24,7 +24,7 @@ func TestBootListCmd(t *testing.T) {
 	_ = os.WriteFile(tempGrub, []byte("menuentry 'Ubuntu' {}\nmenuentry 'Windows' {}"), 0o644)
 
 	deps := &CommandDeps{
-		Grub: &grub.Grub{ConfigPath: tempGrub},
+		Grub: func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = tempGrub; return g }(),
 	}
 
 	cmd := NewBootListCmd(deps)
@@ -51,7 +51,7 @@ func TestBootListCmd_Empty(t *testing.T) {
 	_ = os.WriteFile(tempGrub, []byte(""), 0o644)
 
 	deps := &CommandDeps{
-		Grub: &grub.Grub{ConfigPath: tempGrub},
+		Grub: func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = tempGrub; return g }(),
 	}
 
 	cmd := NewBootListCmd(deps)
@@ -83,7 +83,7 @@ func TestBootPushCmd_Direct(t *testing.T) {
 
 	deps := &CommandDeps{
 		Config:   &config.Config{HomeAssistant: config.HomeAssistantConfig{URL: ts.URL, WebhookID: "fake"}},
-		Grub:     &grub.Grub{ConfigPath: tempGrub},
+		Grub:     func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = tempGrub; return g }(),
 		Registry: initReg,
 	}
 

@@ -7,5 +7,5 @@ import (
 )
 
 func getShutdownCommand() *exec.Cmd {
-	return execCommand("poweroff")
+	return exec.Command("poweroff")
 }

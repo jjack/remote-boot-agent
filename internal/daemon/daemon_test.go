@@ -8,8 +8,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"os/exec"
-	"strings"
 	"testing"
 	"time"
 )
@@ -326,19 +324,11 @@ func TestDaemon_Run_DynamicToken(t *testing.T) {
 }
 
 func TestDaemon_Shutdown_Success(t *testing.T) {
-	oldExec := execCommand
-	defer func() { execCommand = oldExec }()
-
-	cmdCalled := make(chan bool, 1)
-	execCommand = func(name string, arg ...string) *exec.Cmd {
-		cmdCalled <- true
-		return getMockShutdownCommand()
-	}
-
 	port := getFreePort(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	cmdCalled := make(chan bool, 1)
 	token := "token"
 	updateCalled := make(chan bool, 10)
 	d := New(Config{
@@ -350,6 +340,10 @@ func TestDaemon_Shutdown_Success(t *testing.T) {
 		updateCalled <- true
 		return nil
 	})
+	d.ShutdownHandler = func() error {
+		cmdCalled <- true
+		return nil
+	}
 
 	done := make(chan error, 1)
 	go func() { done <- d.run(ctx) }()
@@ -445,16 +439,10 @@ func TestDaemon_Run_HandshakeRetry(t *testing.T) {
 }
 
 func TestDaemon_PerformOSShutdown_Error(t *testing.T) {
-	oldExec := execCommand
-	defer func() {
-		execCommand = oldExec
-	}()
-
-	execCommand = func(name string, arg ...string) *exec.Cmd {
-		return exec.Command("nonexistent-command-12345")
-	}
-
 	d := New(Config{APIKey: "test-key"}, Metadata{}, nil, nil)
+	d.ShutdownHandler = func() error {
+		return errors.New("shutdown failed")
+	}
 	err := d.performOSShutdown()
 
 	if err == nil {
@@ -463,13 +451,6 @@ func TestDaemon_PerformOSShutdown_Error(t *testing.T) {
 }
 
 func TestDaemon_Shutdown_CommandError(t *testing.T) {
-	oldExec := execCommand
-	defer func() { execCommand = oldExec }()
-
-	execCommand = func(name string, arg ...string) *exec.Cmd {
-		return exec.Command("nonexistent-command-12345")
-	}
-
 	port := getFreePort(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -479,6 +460,9 @@ func TestDaemon_Shutdown_CommandError(t *testing.T) {
 		Port:   port,
 		APIKey: token,
 	}, Metadata{}, nil, nil)
+	d.ShutdownHandler = func() error {
+		return errors.New("shutdown error")
+	}
 
 	done := make(chan error, 1)
 	go func() { done <- d.run(ctx) }()
@@ -511,24 +495,6 @@ func TestDaemon_Shutdown_CommandError(t *testing.T) {
 
 	cancel()
 	<-done
-}
-
-func TestDaemon_GenerateTokenFailure(t *testing.T) {
-	oldRandRead := randRead
-	defer func() { randRead = oldRandRead }()
-
-	randRead = func(b []byte) (int, error) {
-		return 0, errors.New("rand error")
-	}
-
-	d := New(Config{APIKey: ""}, Metadata{}, nil, nil)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	err := d.run(ctx)
-	if err == nil || !strings.Contains(err.Error(), "failed to generate dynamic token") {
-		t.Errorf("expected generate dynamic token error, got %v", err)
-	}
 }
 
 func TestDaemon_Run_HandshakeCancel(t *testing.T) {
@@ -606,12 +572,6 @@ func TestDaemon_Run_UpdateError(t *testing.T) {
 }
 
 func TestDaemon_Shutdown_PrePush_Error(t *testing.T) {
-	oldExec := execCommand
-	defer func() { execCommand = oldExec }()
-	execCommand = func(name string, arg ...string) *exec.Cmd {
-		return exec.Command("true")
-	}
-
 	port := getFreePort(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -624,6 +584,9 @@ func TestDaemon_Shutdown_PrePush_Error(t *testing.T) {
 	}, Metadata{}, nil, func(ctx context.Context) error {
 		return errors.New("pre-shutdown push fail")
 	})
+	d.ShutdownHandler = func() error {
+		return nil
+	}
 
 	done := make(chan error, 1)
 	go func() { done <- d.run(ctx) }()
