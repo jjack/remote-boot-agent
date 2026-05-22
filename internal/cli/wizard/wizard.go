@@ -51,7 +51,7 @@ func generateConfigInteractive(ctx context.Context, state SystemState, isDryRun 
 	interfaces := state.Interfaces
 	grubConfigPath := state.GrubConfigPath
 
-	// Background HA Discovery
+	// Background: HA Discovery
 	type haResult struct {
 		instances []homeassistant.ServiceInstance
 		err       error
@@ -68,18 +68,6 @@ func generateConfigInteractive(ctx context.Context, state SystemState, isDryRun 
 		haChan <- haResult{instances, err}
 	}()
 
-	// 2. Installation Mode
-	mode := tap.Select(ctx, tap.SelectOptions[string]{
-		Message: "Installation Mode",
-		Options: GetModeOptions(grubConfigPath),
-	})
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
-	slog.Debug("Selected installation mode", "mode", mode)
-
-	reportsBoot, runsDaemon := GetModeFlags(mode)
-
 	// Background: Global CNAME resolution (can be slow)
 	type globalInfo struct {
 		fqdn string
@@ -91,6 +79,16 @@ func generateConfigInteractive(ctx context.Context, state SystemState, isDryRun 
 		slog.Debug("Background global FQDN resolution complete", "fqdn", fqdn)
 		globalInfoChan <- globalInfo{fqdn}
 	}()
+
+	// 2. Installation Mode
+	mode := tap.Select(ctx, tap.SelectOptions[string]{
+		Message: "Installation Mode",
+		Options: GetModeOptions(grubConfigPath),
+	})
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	slog.Debug("Selected installation mode", "mode", mode)
 
 	// 3. Network Interface
 	ifaceIdx := tap.Select(ctx, tap.SelectOptions[int]{
@@ -111,6 +109,7 @@ func generateConfigInteractive(ctx context.Context, state SystemState, isDryRun 
 	localFQDN := host.GetFQDN(hostname, &selectedIface)
 	slog.Debug("Local FQDN resolution result", "fqdn", localFQDN)
 
+	// Global FQDN resolution (slow on Windows)
 	var globalFQDN string
 	select {
 	case res := <-globalInfoChan:
@@ -132,6 +131,8 @@ func generateConfigInteractive(ctx context.Context, state SystemState, isDryRun 
 		return nil, ctx.Err()
 	}
 	slog.Debug("Selected host address", "address", hostAddress)
+
+	reportsBoot, runsDaemon := GetModeFlags(mode)
 
 	// 5. Daemon Port
 	var AgentPort int
