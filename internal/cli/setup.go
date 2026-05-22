@@ -35,10 +35,17 @@ func NewSetupCmd(deps *CommandDeps) *cobra.Command {
 		Short: "Run the automated setup wizard to configure and install the agent",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			if applyOnly {
-				// For apply, we WANT the default config loading to happen
+				// Use a temporary CLI instance to load config
+				tempCLI := &CLI{}
+				cfgFile, _ := cmd.Flags().GetString("config")
+				if err := tempCLI.LoadConfig(cmd, cfgFile); err != nil {
+					return err
+				}
+				deps.Config = tempCLI.Config
+				deps.ConfigFile = cfgFile
 				return nil
 			}
-			return nil // Override root config loading, we are generating it from scratch
+			return nil // Override root config loading for wizard
 		},
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			dump := setupDebugLogging()

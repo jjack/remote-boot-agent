@@ -79,7 +79,7 @@ func (d *Daemon) TriggerUpdate(ctx context.Context) error {
 	}
 
 	if d.HAClient == nil {
-		return fmt.Errorf("homeassistant client not configured")
+		return fmt.Errorf("home assistant client not configured")
 	}
 
 	var bootOptions []string

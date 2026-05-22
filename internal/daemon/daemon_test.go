@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jjack/grubstation/internal/grub"
 	"github.com/jjack/grubstation/internal/homeassistant"
 )
 
@@ -267,15 +268,34 @@ func TestDaemon_Shutdown_Success(t *testing.T) {
 	<-done
 }
 
-func TestDaemon_PerformOSShutdown_Error(t *testing.T) {
-	d := New(Config{APIKey: "test-key"}, Metadata{}, nil, nil)
-	d.ShutdownHandler = func() error {
-		return errors.New("shutdown failed")
+func TestDaemon_PerformOSShutdown_Success(t *testing.T) {
+	d := &Daemon{
+		ShutdownHandler: func() error {
+			return nil
+		},
 	}
-	err := d.performOSShutdown()
+	if err := d.performOSShutdown(); err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+}
 
-	if err == nil {
-		t.Error("expected error from performOSShutdown, got nil")
+func TestDaemon_PerformOSShutdown_Error(t *testing.T) {
+	d := &Daemon{
+		ShutdownHandler: func() error {
+			return errors.New("fail")
+		},
+	}
+	if err := d.performOSShutdown(); err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
+func TestDaemon_New_ShutdownHandler(t *testing.T) {
+	d := New(Config{}, Metadata{}, nil, nil)
+	// We can't safely run the REAL shutdown command in tests.
+	// But we can verify that ShutdownHandler is not nil.
+	if d.ShutdownHandler == nil {
+		t.Error("expected ShutdownHandler to be set by New")
 	}
 }
 
@@ -317,27 +337,86 @@ func TestDaemon_Shutdown_CommandError(t *testing.T) {
 	<-done
 }
 
-func TestDaemon_Run_HandshakeCancel(t *testing.T) {
+func TestDaemon_TriggerUpdate_Errors(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("DisabledReporting", func(t *testing.T) {
+		d := &Daemon{Config: Config{ReportBootOptions: false}}
+		if err := d.TriggerUpdate(ctx); err != nil {
+			t.Errorf("expected no error when reporting is disabled, got %v", err)
+		}
+	})
+
+	t.Run("MissingHAClient", func(t *testing.T) {
+		d := &Daemon{Config: Config{ReportBootOptions: true}}
+		if err := d.TriggerUpdate(ctx); err == nil || !strings.Contains(err.Error(), "home assistant client not configured") {
+			t.Errorf("expected missing client error, got %v", err)
+		}
+	})
+
+	t.Run("GrubError", func(t *testing.T) {
+		g := grub.NewGrub()
+		g.ConfigPath = "/non/existent"
+		haClient := homeassistant.NewClient("http://ha", "webhook", nil)
+		d := New(Config{ReportBootOptions: true}, Metadata{}, g, haClient)
+
+		if err := d.TriggerUpdate(ctx); err == nil || !strings.Contains(err.Error(), "failed to get boot options") {
+			t.Errorf("expected grub error, got %v", err)
+		}
+	})
+}
+
+func TestDaemon_Run_RegistrationCancel(t *testing.T) {
+	// Test cancellation during registration retry sleep
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
 
-	haClient := homeassistant.NewClient("http://fake", "fake", nil)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer ts.Close()
 
-	port := getFreePort(t)
+	haClient := homeassistant.NewClient(ts.URL, "webhook", nil)
 	d := New(Config{
-		Port:              port,
-		APIKey:            "test-key",
-		RetryInterval:     10 * time.Millisecond,
-		ReportBootOptions: true,
+		Port:          0,
+		RetryInterval: 50 * time.Millisecond,
 	}, Metadata{}, nil, haClient)
 
 	done := make(chan error, 1)
-	go func() { done <- d.run(ctx) }()
+	go func() {
+		done <- d.run(ctx)
+	}()
+
+	// Wait for at least one failed attempt
+	time.Sleep(100 * time.Millisecond)
+	cancel()
 
 	select {
-	case <-done:
-		// Success
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("expected context.Canceled, got %v", err)
+		}
 	case <-time.After(1 * time.Second):
-		t.Error("daemon run did not stop on cancelled context")
+		t.Error("daemon did not stop after registration cancellation")
 	}
+}
+
+func TestDaemon_ListenAndServe_Error(t *testing.T) {
+	// Use an already taken port to trigger ListenAndServe error
+	l, _ := net.Listen("tcp", "127.0.0.1:0")
+	port := l.Addr().(*net.TCPAddr).Port
+	defer func() { _ = l.Close() }()
+
+	d := New(Config{Port: port}, Metadata{}, nil, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// This should log an error but d.run continues until ctx is cancelled
+	done := make(chan error, 1)
+	go func() {
+		done <- d.run(ctx)
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+	<-done
 }

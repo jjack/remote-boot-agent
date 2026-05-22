@@ -64,7 +64,7 @@ func TestCLI_PersistentPreRun_ConfigLoadFail(t *testing.T) {
 		"validate",
 		"--config", "does-not-exist.yaml",
 		"--host-mac", "00:11:22:33:44:55",
-		"--host-address", "test-host",
+		"--host-address", "127.0.0.1",
 		"--homeassistant-url", "http://test-ha.local",
 		"--homeassistant-webhook-id", validWebhook,
 	})
@@ -73,7 +73,7 @@ func TestCLI_PersistentPreRun_ConfigLoadFail(t *testing.T) {
 	cli.RootCmd.SetOut(&b)
 
 	err := cli.Execute()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "failed to read config file") {
+		t.Fatalf("expected config load error, got %v", err)
 	}
 }

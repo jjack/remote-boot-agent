@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -65,7 +66,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		setup       func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem)
+		setup       func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) []string
 		args        []string
 		wantErr     string
 		wantInstall bool
@@ -73,7 +74,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 	}{
 		{
 			name: "Success - Full Installation",
-			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) {
+			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) []string {
 				ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.WriteHeader(http.StatusOK)
 					_, _ = w.Write([]byte("OK"))
@@ -89,6 +90,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 						Daemon:        config.DaemonConfig{ReportBootOptions: true},
 					}, nil
 				}
+				return nil
 			},
 			wantInstall: true,
 			wantOut: []string{
@@ -100,13 +102,14 @@ func TestSetupCmd_Execute(t *testing.T) {
 		},
 		{
 			name: "Success - Dry Run from CLI",
-			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) {
+			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) []string {
 				tempGrub := t.TempDir() + "/grub.cfg"
 				_ = os.WriteFile(tempGrub, []byte(""), 0o644)
 				deps.Grub.ConfigPath = tempGrub
 				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool) (*config.Config, error) {
 					return &config.Config{}, nil
 				}
+				return nil
 			},
 			args:        []string{"--dry-run", "--config", "dummy.yaml"},
 			wantInstall: false,
@@ -116,45 +119,49 @@ func TestSetupCmd_Execute(t *testing.T) {
 		},
 		{
 			name: "Error - ensureSupport Fails (InitSystem)",
-			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) {
+			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) []string {
 				deps.Registry = servicemanager.NewRegistry() // Empty registry causes init system error
+				return nil
 			},
 			wantErr:     "no supported service manager detected",
 			wantInstall: false,
 		},
 		{
 			name: "Error - Generate Survey Fails",
-			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) {
+			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) []string {
 				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool) (*config.Config, error) {
 					return nil, errors.New("survey failed")
 				}
+				return nil
 			},
 			wantErr:     "survey failed",
 			wantInstall: false,
 		},
 		{
 			name: "Error - Permission Denied before Wizard",
-			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) {
+			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) []string {
 				initMock.permissionErr = errors.New("permission denied: root required")
+				return nil
 			},
 			wantErr:     "permission denied: root required",
 			wantInstall: false,
 		},
 		{
 			name: "Error - MkdirAll Fails",
-			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) {
+			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) []string {
 				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool) (*config.Config, error) {
 					return &config.Config{}, nil
 				}
 				osMkdirAll = func(path string, perm os.FileMode) error { return errors.New("mkdirall failed") }
 				t.Cleanup(func() { osMkdirAll = func(path string, perm os.FileMode) error { return nil } })
+				return nil
 			},
 			wantErr:     "failed to create config directory: mkdirall failed",
 			wantInstall: false,
 		},
 		{
 			name: "Error - Save Config Fails",
-			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) {
+			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) []string {
 				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool) (*config.Config, error) {
 					return &config.Config{}, nil
 				}
@@ -163,14 +170,18 @@ func TestSetupCmd_Execute(t *testing.T) {
 					return errors.New("save config failed")
 				}
 				t.Cleanup(func() { config.Save = oldSave })
+				return nil
 			},
 			wantErr:     "save config failed",
 			wantInstall: false,
 		},
 		{
 			name: "Error - Perform Install Fails",
-			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) {
-				// Mock failing grub setup
+			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) []string {
+				tempGrub := t.TempDir() + "/grub.cfg"
+				_ = os.WriteFile(tempGrub, []byte(""), 0o644)
+				deps.Grub.ConfigPath = tempGrub
+				// Trigger failure by making grub setup fail
 				deps.Grub.LookPath = func(file string) (string, error) { return "", errors.New("no tool") }
 
 				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool) (*config.Config, error) {
@@ -178,13 +189,14 @@ func TestSetupCmd_Execute(t *testing.T) {
 						Daemon: config.DaemonConfig{ReportBootOptions: true},
 					}, nil
 				}
+				return nil
 			},
 			wantErr:     "failed to install grub",
 			wantInstall: false,
 		},
 		{
 			name: "Success Install, Push Succeeds",
-			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) {
+			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) []string {
 				// Mock successful GetBootOptions and a working HA endpoint
 				ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.WriteHeader(http.StatusOK)
@@ -193,7 +205,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 				t.Cleanup(ts.Close)
 
 				tempGrub := t.TempDir() + "/grub.cfg"
-				_ = os.WriteFile(tempGrub, []byte(""), 0o644)
+				_ = os.WriteFile(tempGrub, []byte("menuentry 'OS' {}"), 0o644)
 				deps.Grub.ConfigPath = tempGrub
 
 				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool) (*config.Config, error) {
@@ -202,6 +214,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 						Daemon:        config.DaemonConfig{ReportBootOptions: true},
 					}, nil
 				}
+				return nil
 			},
 			wantInstall: true,
 			wantOut: []string{
@@ -212,7 +225,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 		},
 		{
 			name: "Success Install, Push Fails",
-			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) {
+			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) []string {
 				// Mock GetBootOptions and a failing HA endpoint
 				ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.WriteHeader(http.StatusInternalServerError)
@@ -220,7 +233,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 				t.Cleanup(ts.Close)
 
 				tempGrub := t.TempDir() + "/grub.cfg"
-				_ = os.WriteFile(tempGrub, []byte(""), 0o644)
+				_ = os.WriteFile(tempGrub, []byte("menuentry 'OS' {}"), 0o644)
 				deps.Grub.ConfigPath = tempGrub
 
 				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool) (*config.Config, error) {
@@ -229,6 +242,7 @@ func TestSetupCmd_Execute(t *testing.T) {
 						Daemon:        config.DaemonConfig{ReportBootOptions: true},
 					}, nil
 				}
+				return nil
 			},
 			wantErr:     "unexpected status code received from home assistant: 500",
 			wantInstall: false,
@@ -238,22 +252,40 @@ func TestSetupCmd_Execute(t *testing.T) {
 		},
 		{
 			name: "Setup Aborted on Overwrite No",
-			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) {
+			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) []string {
 				wizard.RunGenerateSurvey = func(ctx context.Context, state wizard.SystemState, isDryRun bool) (*config.Config, error) {
 					return nil, wizard.ErrAborted
 				}
+				return nil
 			},
 			wantInstall: false,
 			wantOut:     []string{"Setup aborted."},
 		},
 		{
-			name: "Success - Apply Only",
-			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) {
-				deps.Config = &config.Config{
-					HomeAssistant: config.HomeAssistantConfig{URL: "http://hass.local:8123", WebhookID: "fake"},
-				}
+			name: "Error - Apply Only, No Config",
+			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) []string {
+				return []string{"--apply", "--config", "/non/existent/config.yaml"}
 			},
-			args:        []string{"--apply", "--config", "dummy.yaml"},
+			wantErr:     "failed to read config file",
+			wantInstall: false,
+		},
+		{
+			name: "Success - Apply Only",
+			setup: func(t *testing.T, deps *CommandDeps, initMock *mockInstallInitSystem) []string {
+				tempConfig := filepath.Join(t.TempDir(), "config.yaml")
+				cfg := &config.Config{
+					Host: config.HostConfig{
+						MACAddress: "00:11:22:33:44:55",
+						Address:    "192.168.1.10",
+					},
+					HomeAssistant: config.HomeAssistantConfig{
+						URL:       "http://hass.local:8123",
+						WebhookID: strings.Repeat("a", 64),
+					},
+				}
+				_ = config.Save(cfg, tempConfig)
+				return []string{"--apply", "--config", tempConfig}
+			},
 			wantInstall: true,
 			wantOut:     []string{"Installation completed successfully."},
 		},
@@ -261,12 +293,6 @@ func TestSetupCmd_Execute(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Prevent mock bleed across test iterations
-			origRunGenerateSurvey := wizard.RunGenerateSurvey
-			defer func() {
-				wizard.RunGenerateSurvey = origRunGenerateSurvey
-			}()
-
 			initMock := &mockInstallInitSystem{}
 			initReg := servicemanager.NewRegistry()
 			initReg.Register("mock-init", func() servicemanager.Manager { return initMock })
@@ -277,28 +303,41 @@ func TestSetupCmd_Execute(t *testing.T) {
 				Registry: initReg,
 			}
 
-			// Mock successful grub setup as default for all tests to avoid permission issues
+			// Mock successful grub setup as default
 			deps.Grub.LookPath = func(file string) (string, error) { return "/bin/true", nil }
 			deps.Grub.Command = func(ctx context.Context, command string, args ...string) *exec.Cmd {
 				return exec.CommandContext(ctx, "/bin/true")
 			}
 			deps.Grub.HassGrubStationPath = t.TempDir() + "/99_ha_grub_os_reporter"
 
-			tt.setup(t, deps, initMock)
+			dynamicArgs := tt.setup(t, deps, initMock)
 
 			cmd := NewSetupCmd(deps)
 			var out bytes.Buffer
 			cmd.SetOut(&out)
 			cmd.SetErr(&out)
 
+			// Manually add the persistent flags that would normally be inherited from the root command
+			cmd.Flags().String("config", "dummy.yaml", "")
+			cmd.Flags().String(config.FlagGrubConfig, "", "")
+			cmd.Flags().String(config.FlagMac, "", "")
+			cmd.Flags().String(config.FlagAddress, "", "")
+			cmd.Flags().String(config.FlagWolBroadcastAddress, "", "")
+			cmd.Flags().Int(config.FlagWolBroadcastPort, 9, "")
+			cmd.Flags().String(config.FlagDaemonKey, "", "")
+			cmd.Flags().String(config.FlagHassURL, "", "")
+			cmd.Flags().String(config.FlagHassWebhook, "", "")
+			cmd.Flags().Bool("debug", false, "")
+
 			// Capture tap output into our buffer as well
 			tapOut := tap.NewMockWritable()
 			tap.SetTermIO(nil, tapOut)
 			defer tap.SetTermIO(nil, nil)
 
-			cmd.Flags().String("config", "dummy.yaml", "")
-
-			finalArgs := tt.args
+			finalArgs := dynamicArgs
+			if len(finalArgs) == 0 {
+				finalArgs = tt.args
+			}
 			if len(finalArgs) == 0 {
 				finalArgs = []string{"--config", "dummy.yaml"}
 			}

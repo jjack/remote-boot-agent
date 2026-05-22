@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"os"
 	"testing"
+
+	"github.com/jjack/grubstation/internal/config"
 )
 
 func TestNewCLI(t *testing.T) {
@@ -27,6 +29,10 @@ func TestCLI_Execute(t *testing.T) {
 	var b bytes.Buffer
 	cli.RootCmd.SetOut(&b)
 
+	// Since we are running 'help', LoadConfig is still called in PersistentPreRunE
+	// but it should handle it gracefully or we can just mock a valid config.
+	cli.Config = &config.Config{Host: config.HostConfig{MACAddress: "00:11:22:33:44:55"}}
+
 	err := cli.Execute()
 	if err != nil {
 		t.Fatalf("execute failed: %v", err)
@@ -43,7 +49,7 @@ func TestCLI_PersistentPreRun_ConfigParseFail(t *testing.T) {
 	_ = f.Close()
 
 	cli := NewCLI()
-	cli.RootCmd.SetArgs([]string{"options", "list", "--config", f.Name()})
+	cli.RootCmd.SetArgs([]string{"boot", "list", "--config", f.Name()})
 	err = cli.Execute()
 	if err == nil {
 		t.Fatal("expected error on malformed config file")
@@ -60,7 +66,7 @@ func TestCLI_PersistentPreRun_ConfigValidateFail(t *testing.T) {
 	_ = f.Close()
 
 	cli := NewCLI()
-	cli.RootCmd.SetArgs([]string{"options", "list", "--config", f.Name()})
+	cli.RootCmd.SetArgs([]string{"boot", "list", "--config", f.Name()})
 	err = cli.Execute()
 	if err == nil {
 		t.Fatal("expected error on invalid config file")

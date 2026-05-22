@@ -156,3 +156,86 @@ func TestBootPushCmd_Socket(t *testing.T) {
 		t.Errorf("expected socket success message, got %q", out.String())
 	}
 }
+
+func TestBootPushCmd_Direct_WithWOL(t *testing.T) {
+	// Mock HA server
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	}))
+	defer ts.Close()
+
+	tempGrub := t.TempDir() + "/grub.cfg"
+	_ = os.WriteFile(tempGrub, []byte("menuentry 'Ubuntu' {}"), 0o644)
+
+	deps := &CommandDeps{
+		Config: &config.Config{
+			HomeAssistant: config.HomeAssistantConfig{URL: ts.URL, WebhookID: "fake"},
+			WakeOnLan: &config.WakeOnLanConfig{
+				Address: "192.168.1.255",
+				Port:    9,
+			},
+		},
+		Grub: func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = tempGrub; return g }(),
+	}
+
+	// Ensure no socket exists to force direct push
+	oldSocketPath := daemon.SocketPath
+	daemon.SocketPath = filepath.Join(t.TempDir(), "non-existent.sock")
+	defer func() { daemon.SocketPath = oldSocketPath }()
+
+	cmd := NewBootPushCmd(deps)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(out.String(), "Successfully pushed boot options to Home Assistant") {
+		t.Errorf("expected success message, got %q", out.String())
+	}
+}
+func TestBootPushCmd_Direct_Error(t *testing.T) {
+	t.Run("MissingConfig", func(t *testing.T) {
+		deps := &CommandDeps{Config: &config.Config{}}
+		cmd := NewBootPushCmd(deps)
+		if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "must be configured") {
+			t.Errorf("expected missing config error, got %v", err)
+		}
+	})
+
+	t.Run("GrubError", func(t *testing.T) {
+		deps := &CommandDeps{
+			Config: &config.Config{
+				HomeAssistant: config.HomeAssistantConfig{URL: "http://ha", WebhookID: "id"},
+			},
+			Grub: func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = "/non/existent"; return g }(),
+		}
+		cmd := NewBootPushCmd(deps)
+		if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "failed to open grub config") {
+			t.Errorf("expected grub error, got %v", err)
+		}
+	})
+
+	t.Run("HAError", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer ts.Close()
+
+		tempGrub := t.TempDir() + "/grub.cfg"
+		_ = os.WriteFile(tempGrub, []byte("menuentry 'OS' {}"), 0o644)
+
+		deps := &CommandDeps{
+			Config: &config.Config{
+				HomeAssistant: config.HomeAssistantConfig{URL: ts.URL, WebhookID: "id"},
+			},
+			Grub: func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = tempGrub; return g }(),
+		}
+		cmd := NewBootPushCmd(deps)
+		if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "unexpected status code") {
+			t.Errorf("expected HA error, got %v", err)
+		}
+	})
+}

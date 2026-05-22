@@ -93,6 +93,63 @@ func TestNewServeCmd_ExplicitGrubConfig(t *testing.T) {
 	}
 }
 
+func TestNewServeCmd_MinimalConfig(t *testing.T) {
+	cfg := &config.Config{
+		Daemon: config.DaemonConfig{Port: 0},
+	}
+	// Minimal config with no optional sections
+	deps := &CommandDeps{Config: cfg, Grub: grub.NewGrub(), Registry: servicemanager.NewRegistry()}
+	cmd := NewServeCmd(deps)
+	cmd.SetOut(&bytes.Buffer{})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := cmd.ExecuteContext(ctx)
+	if err != nil && err != context.Canceled {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestNewServeCmd_WithWOL(t *testing.T) {
+	cfg := &config.Config{
+		Daemon: config.DaemonConfig{Port: 0},
+		WakeOnLan: &config.WakeOnLanConfig{
+			Address: "192.168.1.255",
+			Port:    9,
+		},
+	}
+	deps := &CommandDeps{Config: cfg, Grub: grub.NewGrub(), Registry: servicemanager.NewRegistry()}
+	cmd := NewServeCmd(deps)
+	cmd.SetOut(&bytes.Buffer{})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := cmd.ExecuteContext(ctx)
+	if err != nil && err != context.Canceled {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestNewServeCmd_NoGrubConfig(t *testing.T) {
+	cfg := &config.Config{
+		Daemon: config.DaemonConfig{Port: 0, ReportBootOptions: true},
+		Grub:   nil,
+	}
+	deps := &CommandDeps{Config: cfg, Grub: grub.NewGrub(), Registry: servicemanager.NewRegistry()}
+	cmd := NewServeCmd(deps)
+	cmd.SetOut(&bytes.Buffer{})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := cmd.ExecuteContext(ctx)
+	if err != nil && err != context.Canceled {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 type mockManager struct {
 	servicemanager.Manager
 	name   string

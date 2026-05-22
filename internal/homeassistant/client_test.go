@@ -56,26 +56,68 @@ func TestClient_Push(t *testing.T) {
 	}
 }
 
-func TestClient_UnregisterHost(t *testing.T) {
-	var receivedPayload CommonPayload
+func TestClient_RegisterAgent(t *testing.T) {
+	var receivedPayload RegistrationPayload
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		_ = json.Unmarshal(body, &receivedPayload)
+		_ = json.NewDecoder(r.Body).Decode(&receivedPayload)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("OK"))
 	}))
 	defer ts.Close()
 
 	client := NewClient(ts.URL, "test-webhook", nil)
-	payload := CommonPayload{
-		Action:     ActionUnregisterHost,
-		MACAddress: "aa:bb:cc:dd",
-		Address:    "10.0.0.1",
+	err := client.RegisterAgent(context.Background(), "mac", "ip", "token", 8081)
+	if err != nil {
+		t.Fatalf("RegisterAgent failed: %v", err)
 	}
 
-	err := client.PostWebhook(context.Background(), payload)
+	if receivedPayload.Action != ActionRegisterAction {
+		t.Errorf("expected action %s, got %s", ActionRegisterAction, receivedPayload.Action)
+	}
+	if receivedPayload.AgentToken != "token" {
+		t.Errorf("expected token token, got %s", receivedPayload.AgentToken)
+	}
+}
+
+func TestClient_UpdateBootOptions(t *testing.T) {
+	var receivedPayload UpdatePayload
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&receivedPayload)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	}))
+	defer ts.Close()
+
+	client := NewClient(ts.URL, "test-webhook", nil)
+	err := client.UpdateBootOptions(context.Background(), "mac", "ip", []string{"Ubuntu", "Windows"}, "1.1.1.255", 9)
 	if err != nil {
-		t.Fatalf("expected no error, got: %v", err)
+		t.Fatalf("UpdateBootOptions failed: %v", err)
+	}
+
+	if receivedPayload.Action != ActionUpdateAction {
+		t.Errorf("expected action %s, got %s", ActionUpdateAction, receivedPayload.Action)
+	}
+	if len(receivedPayload.BootOptions) != 2 {
+		t.Errorf("expected 2 boot options, got %d", len(receivedPayload.BootOptions))
+	}
+	if receivedPayload.WolBroadcastAddress != "1.1.1.255" {
+		t.Errorf("expected wol address 1.1.1.255, got %s", receivedPayload.WolBroadcastAddress)
+	}
+}
+
+func TestClient_UnregisterHost_Method(t *testing.T) {
+	var receivedPayload CommonPayload
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&receivedPayload)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	}))
+	defer ts.Close()
+
+	client := NewClient(ts.URL, "test-webhook", nil)
+	err := client.UnregisterHost(context.Background(), "mac", "ip")
+	if err != nil {
+		t.Fatalf("UnregisterHost failed: %v", err)
 	}
 
 	if receivedPayload.Action != ActionUnregisterHost {

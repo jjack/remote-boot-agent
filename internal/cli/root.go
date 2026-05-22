@@ -9,6 +9,7 @@ import (
 	"github.com/jjack/grubstation/internal/config"
 	"github.com/jjack/grubstation/internal/grub"
 	"github.com/jjack/grubstation/internal/servicemanager"
+	"github.com/jjack/grubstation/internal/version"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -33,6 +34,41 @@ func (cd *CommandDeps) Manager(ctx context.Context) (servicemanager.Manager, err
 	return mgr, nil
 }
 
+func (cli *CLI) LoadConfig(cmd *cobra.Command, cfgFile string) error {
+	v := config.NewViper(cfgFile)
+	// Bind flags to viper keys
+	_ = v.BindPFlag("grub.config_path", cmd.Flags().Lookup(config.FlagGrubConfig))
+	_ = v.BindPFlag("host.mac", cmd.Flags().Lookup(config.FlagMac))
+	_ = v.BindPFlag("host.address", cmd.Flags().Lookup(config.FlagAddress))
+	_ = v.BindPFlag("wake_on_lan.address", cmd.Flags().Lookup(config.FlagWolBroadcastAddress))
+	_ = v.BindPFlag("wake_on_lan.port", cmd.Flags().Lookup(config.FlagWolBroadcastPort))
+	_ = v.BindPFlag("homeassistant.url", cmd.Flags().Lookup(config.FlagHassURL))
+	_ = v.BindPFlag("homeassistant.webhook_id", cmd.Flags().Lookup(config.FlagHassWebhook))
+	_ = v.BindPFlag("daemon.port", cmd.Flags().Lookup(config.FlagAgentPort))
+	_ = v.BindPFlag("daemon.api_key", cmd.Flags().Lookup(config.FlagDaemonKey))
+
+	if err := v.ReadInConfig(); err != nil {
+		if cfgFile != "" {
+			return fmt.Errorf("failed to read config file %s: %w", cfgFile, err)
+		}
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to read config file: %w", err)
+		}
+	}
+
+	cfg, err := config.Unmarshal(v)
+	if err != nil {
+		return err
+	}
+
+	if err := cfg.Validate(); err != nil {
+		return err
+	}
+
+	cli.Config = cfg
+	return nil
+}
+
 func NewCLI() *CLI {
 	cli := &CLI{}
 
@@ -46,21 +82,11 @@ func NewCLI() *CLI {
 	var debugMode bool
 
 	rootCmd := &cobra.Command{
-		Use:           "grubstation",
-		Short:         "grubstation reads boot configurations and posts them to Home Assistant",
-		SilenceErrors: true,
-		SilenceUsage:  true,
+		Use:   "grubstation",
+		Short: "Remote Boot Agent for Home Assistant",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			if cmd.Name() == "help" || cmd.Name() == "init" {
+			if cmd.Name() == "help" || cmd.Name() == "init" || cmd.Name() == "version" {
 				return nil
-			}
-
-			// setup command handles its own config loading/generation unless in --apply mode
-			if cmd.Name() == "setup" {
-				apply, _ := cmd.Flags().GetBool("apply")
-				if !apply {
-					return nil
-				}
 			}
 
 			if debugMode || os.Getenv("DEBUG") == "true" {
@@ -69,45 +95,17 @@ func NewCLI() *CLI {
 				})))
 			}
 
-			v := config.NewViper(cfgFile)
-			// Bind flags to viper keys
-			_ = v.BindPFlag("grub.config_path", cmd.Flags().Lookup(config.FlagGrubConfig))
-			_ = v.BindPFlag("host.mac", cmd.Flags().Lookup(config.FlagMac))
-			_ = v.BindPFlag("host.address", cmd.Flags().Lookup(config.FlagAddress))
-			_ = v.BindPFlag("wake_on_lan.address", cmd.Flags().Lookup(config.FlagWolBroadcastAddress))
-			_ = v.BindPFlag("wake_on_lan.port", cmd.Flags().Lookup(config.FlagWolBroadcastPort))
-			_ = v.BindPFlag("homeassistant.url", cmd.Flags().Lookup(config.FlagHassURL))
-			_ = v.BindPFlag("homeassistant.webhook_id", cmd.Flags().Lookup(config.FlagHassWebhook))
-			_ = v.BindPFlag("daemon.port", cmd.Flags().Lookup(config.FlagAgentPort))
-			_ = v.BindPFlag("daemon.api_key", cmd.Flags().Lookup(config.FlagDaemonKey))
-
-			if err := v.ReadInConfig(); err != nil {
-				if _, ok := err.(viper.ConfigFileNotFoundError); !ok && !os.IsNotExist(err) {
-					return fmt.Errorf("failed to read config file: %w", err)
-				}
-			}
-
-			cfg, err := config.Unmarshal(v)
-			if err != nil {
+			if err := cli.LoadConfig(cmd, cfgFile); err != nil {
 				return err
 			}
 
-			if err := cfg.Validate(); err != nil {
-				return err
-			}
-
-			*deps.Config = *cfg
+			deps.Config = cli.Config
 			deps.ConfigFile = cfgFile
-			cli.Config = deps.Config
-
-			if cfg.Grub != nil && cfg.Grub.ConfigPath != "" {
-				deps.Grub.ConfigPath = cfg.Grub.ConfigPath
-			}
 			return nil
 		},
 	}
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", config.DefaultConfigPath(), "config file")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is /etc/grubstation/config.yaml)")
 	rootCmd.PersistentFlags().String(config.FlagGrubConfig, "", "GRUB config path override")
 	rootCmd.PersistentFlags().String(config.FlagMac, "", "MAC Address override")
 	rootCmd.PersistentFlags().String(config.FlagAddress, "", "Address override")
@@ -116,22 +114,30 @@ func NewCLI() *CLI {
 	rootCmd.PersistentFlags().String(config.FlagDaemonKey, "", "API key for the daemon")
 	rootCmd.PersistentFlags().String(config.FlagHassURL, "", "Home Assistant URL override")
 	rootCmd.PersistentFlags().String(config.FlagHassWebhook, "", "Home Assistant Webhook ID override")
-	rootCmd.PersistentFlags().BoolVar(&debugMode, "debug", false, "Enable debug logging")
-
-	// Register platform-specific services automatically
-	servicemanager.RegisterDefaultServices(deps.Registry)
+	rootCmd.PersistentFlags().BoolVar(&debugMode, "debug", false, "enable debug logging")
 
 	rootCmd.AddCommand(NewBootCmd(deps))
 	rootCmd.AddCommand(NewConfigCmd(deps))
-	rootCmd.AddCommand(NewSetupCmd(deps))
-	rootCmd.AddCommand(NewServiceCmd(deps))
 	rootCmd.AddCommand(NewServeCmd(deps))
+	rootCmd.AddCommand(NewServiceCmd(deps))
+	rootCmd.AddCommand(NewSetupCmd(deps))
+	rootCmd.AddCommand(NewVersionCmd())
 
 	// get rid of the completion command because it doesn't make sense here
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
 
 	cli.RootCmd = rootCmd
 	return cli
+}
+
+func NewVersionCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "version",
+		Short: "Print the version number of GrubStation",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Printf("GrubStation %s\n", version.Version)
+		},
+	}
 }
 
 func (cli *CLI) Execute() error {
