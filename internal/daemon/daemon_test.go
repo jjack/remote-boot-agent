@@ -246,8 +246,9 @@ func TestDaemon_Run_HandshakeSuccess(t *testing.T) {
 	updateDone := make(chan bool, 1)
 
 	d := New(Config{
-		Port:   port,
-		APIKey: token,
+		Port:              port,
+		APIKey:            token,
+		ReportBootOptions: true,
 	}, Metadata{}, func(ctx context.Context, tok string) error {
 		if tok == token {
 			registrationDone <- true
@@ -405,9 +406,10 @@ func TestDaemon_Run_HandshakeRetry(t *testing.T) {
 	registrationDone := make(chan bool, 1)
 
 	d := New(Config{
-		Port:          port,
-		APIKey:        "test-key",
-		RetryInterval: 10 * time.Millisecond,
+		Port:              port,
+		APIKey:            "test-key",
+		RetryInterval:     10 * time.Millisecond,
+		ReportBootOptions: true,
 	}, Metadata{}, func(ctx context.Context, tok string) error {
 		callCount++
 		if callCount == 1 {
@@ -504,9 +506,10 @@ func TestDaemon_Run_HandshakeCancel(t *testing.T) {
 
 	port := getFreePort(t)
 	d := New(Config{
-		Port:          port,
-		APIKey:        "test-key",
-		RetryInterval: 10 * time.Millisecond,
+		Port:              port,
+		APIKey:            "test-key",
+		RetryInterval:     10 * time.Millisecond,
+		ReportBootOptions: true,
 	}, Metadata{}, func(ctx context.Context, tok string) error {
 		return errors.New("fail")
 	}, nil)

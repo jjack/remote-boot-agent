@@ -24,7 +24,7 @@ func TestUnixSocketPush(t *testing.T) {
 	defer cancel()
 
 	pushed := false
-	d := New(Config{}, Metadata{}, nil, func(ctx context.Context) error {
+	d := New(Config{ReportBootOptions: true}, Metadata{}, nil, func(ctx context.Context) error {
 		pushed = true
 		return nil
 	})
@@ -51,7 +51,7 @@ func TestUnixSocket_ListenError(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	d := New(Config{}, Metadata{}, nil, nil)
+	d := New(Config{ReportBootOptions: true}, Metadata{}, nil, nil)
 
 	// Call in a goroutine with a channel to signal completion
 	done := make(chan struct{})
@@ -77,7 +77,7 @@ func TestUnixSocket_PushHandlerError(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	d := New(Config{}, Metadata{}, nil, func(ctx context.Context) error {
+	d := New(Config{ReportBootOptions: true}, Metadata{}, nil, func(ctx context.Context) error {
 		return errors.New("push failed")
 	})
 	go d.listenUnixSocket(ctx, "token")
@@ -98,7 +98,7 @@ func TestUnixSocket_NoPushHandler(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	d := New(Config{}, Metadata{}, nil, nil)
+	d := New(Config{ReportBootOptions: true}, Metadata{}, nil, nil)
 	go d.listenUnixSocket(ctx, "token")
 	time.Sleep(50 * time.Millisecond)
 
@@ -117,7 +117,7 @@ func TestRequestPushViaSocket_NoSocket(t *testing.T) {
 }
 
 func TestDaemon_Run(t *testing.T) {
-	d := New(Config{}, Metadata{}, nil, nil)
+	d := New(Config{ReportBootOptions: true}, Metadata{}, nil, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

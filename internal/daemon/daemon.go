@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"runtime"
+	"sync"
 	"time"
 )
 
@@ -42,6 +44,8 @@ type Daemon struct {
 	RegisterHandler func(ctx context.Context, token string) error
 	UpdateHandler   func(ctx context.Context) error
 	ShutdownHandler func() error
+
+	mu sync.Mutex
 }
 
 func New(cfg Config, meta Metadata, regHandler func(ctx context.Context, token string) error, updateHandler func(ctx context.Context) error) *Daemon {
@@ -54,6 +58,28 @@ func New(cfg Config, meta Metadata, regHandler func(ctx context.Context, token s
 			return getShutdownCommand().Run()
 		},
 	}
+}
+
+// TriggerUpdate performs a boot options push to Home Assistant.
+func (d *Daemon) TriggerUpdate(ctx context.Context) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if !d.Config.ReportBootOptions {
+		return nil
+	}
+
+	if d.UpdateHandler == nil {
+		return fmt.Errorf("UpdateHandler not configured")
+	}
+
+	slog.Debug("Triggering boot options update")
+	if err := d.UpdateHandler(ctx); err != nil {
+		return fmt.Errorf("update failed: %w", err)
+	}
+
+	slog.Debug("Update successful")
+	return nil
 }
 
 // run contains the core daemon logic.
@@ -70,51 +96,45 @@ func (d *Daemon) run(ctx context.Context) error {
 		slog.Info("Using configured API key")
 	}
 
-	go d.listenUnixSocket(ctx, token)
-
-	// 1. Initial Handshake (Register + First Update) with Retry logic
+	// 1. Initial Handshake (Register + First Update) - PREREQUISITE
 	if d.RegisterHandler != nil {
-		go func() {
-			backoff := d.Config.RetryInterval
-			if backoff == 0 {
-				backoff = 5 * time.Second
-			}
-			maxBackoff := 5 * time.Minute
-			for {
+		backoff := d.Config.RetryInterval
+		if backoff == 0 {
+			backoff = 5 * time.Second
+		}
+		maxBackoff := 5 * time.Minute
+
+		slog.Info("Starting initial registration")
+	registrationLoop:
+		for {
+			if err := d.RegisterHandler(ctx, token); err != nil {
+				slog.Warn("Initial registration failed, retrying...", "error", err, "retry_in", backoff)
 				select {
 				case <-ctx.Done():
-					return
-				default:
-					if err := d.RegisterHandler(ctx, token); err != nil {
-						slog.Warn("Initial registration failed, retrying...", "error", err, "retry_in", backoff)
-						select {
-						case <-ctx.Done():
-							return
-						case <-time.After(backoff):
-						}
-						backoff *= 2
-						if backoff > maxBackoff {
-							backoff = maxBackoff
-						}
-						continue
-					}
-					slog.Info("Initial registration successful")
-
-					// Immediately send first update after successful registration
-					if d.UpdateHandler != nil {
-						if err := d.UpdateHandler(ctx); err != nil {
-							slog.Error("Initial update failed", "error", err)
-						} else {
-							slog.Info("Initial update successful")
-						}
-					}
-					return
+					return ctx.Err()
+				case <-time.After(backoff):
 				}
+				backoff *= 2
+				if backoff > maxBackoff {
+					backoff = maxBackoff
+				}
+				continue
 			}
-		}()
+			slog.Info("Initial registration successful")
+			break registrationLoop
+		}
+
+		// Initial update after successful registration
+		if err := d.TriggerUpdate(ctx); err != nil {
+			slog.Error("Initial update failed", "error", err)
+		} else {
+			slog.Info("Initial update successful")
+		}
 	}
 
-	// 2. Start HTTP Server
+	// 2. Start Listeners
+	go d.listenUnixSocket(ctx, token)
+
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", d.Config.Port),
 		ReadTimeout:  5 * time.Second,
@@ -154,11 +174,8 @@ func (d *Daemon) run(ctx context.Context) error {
 				slog.Info("Shutdown requested via HTTP")
 
 				// Perform pre-shutdown push (synchronous)
-				if d.Config.ReportBootOptions && d.UpdateHandler != nil {
-					slog.Info("Performing pre-shutdown GRUB report push")
-					if err := d.UpdateHandler(ctx); err != nil {
-						slog.Error("Pre-shutdown push failed", "error", err)
-					}
+				if err := d.TriggerUpdate(ctx); err != nil {
+					slog.Error("Pre-shutdown push failed", "error", err)
 				}
 
 				if err := d.performOSShutdown(); err != nil {
@@ -195,7 +212,14 @@ func (d *Daemon) run(ctx context.Context) error {
 	<-ctx.Done()
 	slog.Info("Shutting down daemon...")
 
-	onShutdownHook(ctx, d)
+	if runtime.GOOS == "linux" {
+		slog.Info("Performing final GRUB report push")
+		pushCtx, pushCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer pushCancel()
+		if err := d.TriggerUpdate(pushCtx); err != nil {
+			slog.Error("Final push failed", "error", err)
+		}
+	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
