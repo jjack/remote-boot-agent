@@ -10,6 +10,7 @@ import (
 	"github.com/jjack/grubstation/internal/grub"
 	"github.com/jjack/grubstation/internal/servicemanager"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 type CLI struct {
@@ -68,7 +69,25 @@ func NewCLI() *CLI {
 				})))
 			}
 
-			cfg, err := config.Load(cfgFile, cmd.Flags())
+			v := config.NewViper(cfgFile)
+			// Bind flags to viper keys
+			_ = v.BindPFlag("grub.config_path", cmd.Flags().Lookup(config.FlagGrubConfig))
+			_ = v.BindPFlag("host.mac", cmd.Flags().Lookup(config.FlagMac))
+			_ = v.BindPFlag("host.address", cmd.Flags().Lookup(config.FlagAddress))
+			_ = v.BindPFlag("wake_on_lan.address", cmd.Flags().Lookup(config.FlagWolBroadcastAddress))
+			_ = v.BindPFlag("wake_on_lan.port", cmd.Flags().Lookup(config.FlagWolBroadcastPort))
+			_ = v.BindPFlag("homeassistant.url", cmd.Flags().Lookup(config.FlagHassURL))
+			_ = v.BindPFlag("homeassistant.webhook_id", cmd.Flags().Lookup(config.FlagHassWebhook))
+			_ = v.BindPFlag("daemon.port", cmd.Flags().Lookup(config.FlagAgentPort))
+			_ = v.BindPFlag("daemon.api_key", cmd.Flags().Lookup(config.FlagDaemonKey))
+
+			if err := v.ReadInConfig(); err != nil {
+				if _, ok := err.(viper.ConfigFileNotFoundError); !ok && !os.IsNotExist(err) {
+					return fmt.Errorf("failed to read config file: %w", err)
+				}
+			}
+
+			cfg, err := config.Unmarshal(v)
 			if err != nil {
 				return err
 			}

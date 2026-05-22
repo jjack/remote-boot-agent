@@ -91,8 +91,12 @@ func TestServiceRemoveCmd(t *testing.T) {
 	initReg.Register("mock-svc", func() servicemanager.Manager { return mock })
 
 	deps := &CommandDeps{
-		Config:   &config.Config{Daemon: config.DaemonConfig{ReportBootOptions: true}},
-		Grub:     func() *grub.Grub { g := grub.NewGrub(); g.ConfigPath = filepath.Join(t.TempDir(), "grub.cfg"); return g }(),
+		Config: &config.Config{Daemon: config.DaemonConfig{ReportBootOptions: true}},
+		Grub: func() *grub.Grub {
+			g := grub.NewGrub()
+			g.ConfigPath = filepath.Join(t.TempDir(), "grub.cfg")
+			return g
+		}(),
 		Registry: initReg,
 	}
 

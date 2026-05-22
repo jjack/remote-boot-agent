@@ -3,9 +3,9 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/go-viper/mapstructure/v2"
-	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
 )
@@ -28,8 +28,6 @@ const (
 	FlagAgentPort           = "daemon-port"
 	FlagDaemonKey           = "daemon-key"
 )
-
-var viperBindPFlag = func(v *viper.Viper, key string, flag *pflag.Flag) error { return v.BindPFlag(key, flag) }
 
 type Config struct {
 	Host          HostConfig          `yaml:"host"`
@@ -66,11 +64,17 @@ type HomeAssistantConfig struct {
 	WebhookID string `yaml:"webhook_id"`
 }
 
-func (c *Config) ToYAML(maskWebhook bool, exhaustive bool) (string, error) {
-	displayCfg := *c
+type Exporter struct {
+	Config     Config
+	Exhaustive bool
+	Mask       bool
+}
+
+func (e *Exporter) ToYAML() (string, error) {
+	displayCfg := e.Config
 
 	// If sub-configs are empty or default, nil them out so omitempty works
-	if !exhaustive {
+	if !e.Exhaustive {
 		if displayCfg.WakeOnLan != nil {
 			wol := *displayCfg.WakeOnLan
 			displayCfg.WakeOnLan = &wol
@@ -96,9 +100,9 @@ func (c *Config) ToYAML(maskWebhook bool, exhaustive bool) (string, error) {
 		}
 	}
 
-	if maskWebhook && len(displayCfg.HomeAssistant.WebhookID) > 8 {
+	if e.Mask && len(displayCfg.HomeAssistant.WebhookID) > 8 {
 		displayCfg.HomeAssistant.WebhookID = displayCfg.HomeAssistant.WebhookID[:4] + "..." + displayCfg.HomeAssistant.WebhookID[len(displayCfg.HomeAssistant.WebhookID)-4:]
-	} else if maskWebhook && displayCfg.HomeAssistant.WebhookID != "" {
+	} else if e.Mask && displayCfg.HomeAssistant.WebhookID != "" {
 		displayCfg.HomeAssistant.WebhookID = "***"
 	}
 
@@ -110,8 +114,12 @@ func (c *Config) ToYAML(maskWebhook bool, exhaustive bool) (string, error) {
 	return string(out), nil
 }
 
-func Load(cfgFile string, flags *pflag.FlagSet) (*Config, error) {
+func NewViper(cfgFile string) *viper.Viper {
 	v := viper.New()
+	v.SetEnvPrefix("GRUBSTATION")
+	v.AutomaticEnv()
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
+
 	if cfgFile != "" {
 		v.SetConfigFile(cfgFile)
 	} else {
@@ -119,34 +127,10 @@ func Load(cfgFile string, flags *pflag.FlagSet) (*Config, error) {
 		v.SetConfigName("config")
 		v.SetConfigType("yaml")
 	}
+	return v
+}
 
-	if flags != nil {
-		flagMap := map[string]string{
-			"grub.config_path":         FlagGrubConfig,
-			"host.mac":                 FlagMac,
-			"host.address":             FlagAddress,
-			"wake_on_lan.address":      FlagWolBroadcastAddress,
-			"wake_on_lan.port":         FlagWolBroadcastPort,
-			"homeassistant.url":        FlagHassURL,
-			"homeassistant.webhook_id": FlagHassWebhook,
-			"daemon.port":              FlagAgentPort,
-			"daemon.api_key":           FlagDaemonKey,
-		}
-		for configKey, flagName := range flagMap {
-			if flag := flags.Lookup(flagName); flag != nil {
-				if err := viperBindPFlag(v, configKey, flag); err != nil {
-					return nil, fmt.Errorf("failed to bind flag %s: %w", flagName, err)
-				}
-			}
-		}
-	}
-
-	if err := v.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok && !os.IsNotExist(err) {
-			return nil, fmt.Errorf("failed to read config file: %w", err)
-		}
-	}
-
+func Unmarshal(v *viper.Viper) (*Config, error) {
 	var cfg Config
 	// Use "yaml" tags for unmarshaling to avoid redundancy
 	if err := v.Unmarshal(&cfg, func(dc *mapstructure.DecoderConfig) {
@@ -171,8 +155,8 @@ func Load(cfgFile string, flags *pflag.FlagSet) (*Config, error) {
 }
 
 var Save = func(cfg *Config, path string) error {
-	maskWebHook := false
-	out, err := cfg.ToYAML(maskWebHook, false)
+	exporter := &Exporter{Config: *cfg}
+	out, err := exporter.ToYAML()
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
@@ -184,8 +168,8 @@ var Save = func(cfg *Config, path string) error {
 }
 
 func SaveExhaustive(cfg *Config, path string) error {
-	maskWebHook := false
-	out, err := cfg.ToYAML(maskWebHook, true)
+	exporter := &Exporter{Config: *cfg, Exhaustive: true}
+	out, err := exporter.ToYAML()
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}

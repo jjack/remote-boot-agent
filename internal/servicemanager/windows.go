@@ -11,9 +11,7 @@ import (
 )
 
 const (
-	WindowsServiceName        = "GrubStation"
-	windowsServiceDisplayName = "GrubStation"
-	windowsServiceDescription = "Persistent daemon for reporting boot options and remote shutdown"
+	WindowsServiceName = "GrubStation"
 )
 
 type WindowsService struct{}
@@ -118,6 +116,7 @@ func (w *WindowsService) Stop(ctx context.Context) error {
 
 	return nil
 }
+
 func (w *WindowsService) Configure(ctx context.Context, cfg *config.Config) error {
 	// Firewall configuration is handled by the WiX installer (MSI) using a program-based rule
 	return nil

@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +9,34 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
+
+func loadHelper(cfgFile string, flags *pflag.FlagSet) (*Config, error) {
+	v := NewViper(cfgFile)
+	if flags != nil {
+		flagMap := map[string]string{
+			"grub.config_path":         FlagGrubConfig,
+			"host.mac":                 FlagMac,
+			"host.address":             FlagAddress,
+			"wake_on_lan.address":      FlagWolBroadcastAddress,
+			"wake_on_lan.port":         FlagWolBroadcastPort,
+			"homeassistant.url":        FlagHassURL,
+			"homeassistant.webhook_id": FlagHassWebhook,
+			"daemon.port":              FlagAgentPort,
+			"daemon.api_key":           FlagDaemonKey,
+		}
+		for configKey, flagName := range flagMap {
+			if flag := flags.Lookup(flagName); flag != nil {
+				_ = v.BindPFlag(configKey, flag)
+			}
+		}
+	}
+	if err := v.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok && !os.IsNotExist(err) {
+			return nil, err
+		}
+	}
+	return Unmarshal(v)
+}
 
 func TestConfig_SaveAndLoad(t *testing.T) {
 	tempDir := t.TempDir()
@@ -50,7 +77,7 @@ func TestConfig_SaveAndLoad(t *testing.T) {
 	}
 
 	// Test loading from the filesystem
-	loadedCfg, err := Load(cfgPath, nil)
+	loadedCfg, err := loadHelper(cfgPath, nil)
 	if err != nil {
 		t.Fatalf("failed to load config: %v", err)
 	}
@@ -99,7 +126,7 @@ func TestConfig_SaveAndLoad_Defaults(t *testing.T) {
 		t.Errorf("expected wake_on_lan to be omitted from save, but found in file: %s", string(content))
 	}
 
-	loadedCfg, err := Load(cfgPath, nil)
+	loadedCfg, err := loadHelper(cfgPath, nil)
 	if err != nil {
 		t.Fatalf("failed to load config: %v", err)
 	}
@@ -123,7 +150,7 @@ func TestConfig_LoadDefaults(t *testing.T) {
 	_ = os.Chdir(t.TempDir()) // Ensure we're in an empty directory without a config file
 	defer func() { _ = os.Chdir(originalWD) }()
 
-	cfg, err := Load("", nil)
+	cfg, err := loadHelper("", nil)
 	if err != nil {
 		t.Fatalf("expected no error when config file is absent, got: %v", err)
 	}
@@ -156,7 +183,7 @@ func TestLoad_WithFlags(t *testing.T) {
 		t.Fatalf("Failed to write temp config: %v", err)
 	}
 
-	cfg, err := Load(cfgPath, fs)
+	cfg, err := loadHelper(cfgPath, fs)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -192,12 +219,13 @@ func TestDefaultConfigPath(t *testing.T) {
 }
 
 func TestConfig_ToYAML_DefaultGrub(t *testing.T) {
-	cfg := &Config{
+	cfg := Config{
 		Grub: &GrubConfig{
 			WaitTimeSeconds: DefaultGrubWaitSeconds,
 		},
 	}
-	yaml, err := cfg.ToYAML(false, false)
+	exporter := &Exporter{Config: cfg}
+	yaml, err := exporter.ToYAML()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +234,8 @@ func TestConfig_ToYAML_DefaultGrub(t *testing.T) {
 	}
 
 	// Test exhaustive
-	yaml, err = cfg.ToYAML(false, true)
+	exporter.Exhaustive = true
+	yaml, err = exporter.ToYAML()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,7 +245,7 @@ func TestConfig_ToYAML_DefaultGrub(t *testing.T) {
 }
 
 func TestConfig_ToYAML_NoMutation(t *testing.T) {
-	cfg := &Config{
+	cfg := Config{
 		HomeAssistant: HomeAssistantConfig{
 			WebhookID: "original-webhook-id",
 		},
@@ -229,7 +258,8 @@ func TestConfig_ToYAML_NoMutation(t *testing.T) {
 		},
 	}
 
-	_, err := cfg.ToYAML(true, false)
+	exporter := &Exporter{Config: cfg, Mask: true}
+	_, err := exporter.ToYAML()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,24 +282,8 @@ func TestLoad_MalformedYAML(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := Load(cfgPath, nil)
+	_, err := loadHelper(cfgPath, nil)
 	if err == nil {
 		t.Error("expected error for malformed YAML, got nil")
-	}
-}
-
-func TestLoad_ViperBindPFlagError(t *testing.T) {
-	oldViperBindPFlag := viperBindPFlag
-	viperBindPFlag = func(v *viper.Viper, key string, flag *pflag.Flag) error {
-		return fmt.Errorf("forced error")
-	}
-	defer func() { viperBindPFlag = oldViperBindPFlag }()
-
-	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
-	fs.String(FlagMac, "", "")
-
-	_, err := Load("", fs)
-	if err == nil || !strings.Contains(err.Error(), "forced error") {
-		t.Errorf("expected forced error, got %v", err)
 	}
 }
